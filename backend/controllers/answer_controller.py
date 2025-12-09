@@ -19,13 +19,18 @@ def submit_answer(current_user):
     data = request.get_json()
     if not data.get('session_code') or not data.get('text'):
         return jsonify({'error': 'session_code and text required'}), 400
+    if data.get('device_id') is None or str(data.get('device_id')).strip() == '':
+        return jsonify({'error': 'device_id обязателен. Обновите страницу.'}), 400
     try:
         res = answer_service.submit_answer(
-            current_user['id'], data['session_code'], data['text']
+            current_user['id'],
+            data['session_code'],
+            data['text'],
+            str(data['device_id']).strip(),
         )
         return jsonify(res), 201
     except ValueError as e:
-        return jsonify({'error': str(e)}), 403
+        return jsonify({'error': str(e)}), 400
 
 
 @token_required

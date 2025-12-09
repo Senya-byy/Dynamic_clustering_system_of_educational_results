@@ -20,8 +20,12 @@ def token_required(f):
         try:
             # Декодирование токена
             payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
+            try:
+                uid = int(payload.get('id'))
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Invalid token'}), 401
             current_user = {
-                'id': payload.get('id'),
+                'id': uid,
                 'role': payload.get('role'),
                 'exp': payload.get('exp')
             }

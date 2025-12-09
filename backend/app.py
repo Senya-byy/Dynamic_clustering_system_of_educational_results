@@ -4,6 +4,7 @@ from flask import Flask
 from sqlalchemy.exc import OperationalError
 from config import Config
 from models import db
+from utils.lan_hosts import vite_lan_cors_origins
 
 
 def seed_data():
@@ -72,6 +73,31 @@ def seed_data():
     db.session.commit()
 
 
+def _ensure_sqlite_migrations():
+    """Добавляет столбцы в существующую SQLite-базу (create_all их не меняет)."""
+    from sqlalchemy import inspect, text
+
+    if db.engine.url.drivername != 'sqlite':
+        return
+    insp = inspect(db.engine)
+    tables = insp.get_table_names()
+    if 'answers' in tables:
+        cols = {c['name'] for c in insp.get_columns('answers')}
+        if 'question_id' not in cols:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE answers ADD COLUMN question_id INTEGER'))
+    if 'sessions' in tables:
+        scols = {c['name'] for c in insp.get_columns('sessions')}
+        if 'title' not in scols:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE sessions ADD COLUMN title VARCHAR(250)'))
+    if 'cluster_runs' in tables:
+        crc = {c['name'] for c in insp.get_columns('cluster_runs')}
+        if 'silhouette_score' not in crc:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE cluster_runs ADD COLUMN silhouette_score FLOAT'))
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -79,11 +105,19 @@ def create_app():
 
     origins = os.environ.get(
         'CORS_ORIGINS',
-        'http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173',
+        'http://localhost:5173,http://localhost:5174,'
+        'http://127.0.0.1:5173,http://127.0.0.1:5174',
     ).split(',')
+    origins = [o.strip() for o in origins if o.strip()]
+    if os.environ.get('CORS_ALLOW_LAN', 'true').lower() in ('1', 'true', 'yes'):
+        seen = set(origins)
+        for o in vite_lan_cors_origins():
+            if o not in seen:
+                seen.add(o)
+                origins.append(o)
     CORS(
         app,
-        origins=[o.strip() for o in origins if o.strip()],
+        origins=origins,
         supports_credentials=True,
         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'X-Frontend-Origin'],
         methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -92,13 +126,16 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _ensure_sqlite_migrations()
         try:
             seed_data()
         except OperationalError:
             db.drop_all()
             db.create_all()
+            _ensure_sqlite_migrations()
             seed_data()
 
+    from controllers.meta_controller import get_qr_origin
     from controllers.auth_controller import auth_bp
     from controllers.question_controller import (
         create_question,
@@ -115,6 +152,7 @@ def create_app():
         verify_join_ticket,
         list_teacher_sessions,
         close_session,
+        patch_session_title,
     )
     from controllers.answer_controller import (
         my_answers,
@@ -125,7 +163,15 @@ def create_app():
     from controllers.rating_controller import get_group_rating
     from controllers.attendance_controller import get_group_stats
     from controllers.group_controller import list_my_groups
-    from controllers.analytics_controller import get_group_stat, get_student_stat
+    from controllers.analytics_controller import (
+        get_group_stat,
+        get_group_students_metrics,
+        get_student_stat,
+        post_cluster_run,
+        list_cluster_runs,
+        get_cluster_transitions,
+        get_cluster_run_detail,
+    )
     from controllers.schedule_controller import (
         get_schedule,
         get_current_slot,
@@ -133,25 +179,40 @@ def create_app():
         schedule_slot,
     )
     from controllers.import_controller import post_import_schedule
-    from controllers.topic_controller import list_topics, create_topic
+    from controllers.topic_controller import list_topics, create_topic, delete_topic
     from controllers.admin_controller import (
         admin_list_users,
         admin_create_user,
         admin_list_groups,
         admin_create_group,
         admin_list_teachers,
+        admin_delete_user,
+        admin_delete_group,
     )
+
+    app.add_url_rule('/api/meta/qr-origin', view_func=get_qr_origin, methods=['GET'])
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
     app.add_url_rule('/api/admin/users', view_func=admin_list_users, methods=['GET'])
     app.add_url_rule('/api/admin/users', view_func=admin_create_user, methods=['POST'])
+    app.add_url_rule(
+        '/api/admin/users/<int:uid>',
+        view_func=admin_delete_user,
+        methods=['DELETE'],
+    )
     app.add_url_rule('/api/admin/groups', view_func=admin_list_groups, methods=['GET'])
     app.add_url_rule('/api/admin/groups', view_func=admin_create_group, methods=['POST'])
+    app.add_url_rule(
+        '/api/admin/groups/<int:gid>',
+        view_func=admin_delete_group,
+        methods=['DELETE'],
+    )
     app.add_url_rule('/api/admin/teachers', view_func=admin_list_teachers, methods=['GET'])
 
     app.add_url_rule('/api/topics', view_func=list_topics, methods=['GET'])
     app.add_url_rule('/api/topics', view_func=create_topic, methods=['POST'])
+    app.add_url_rule('/api/topics/<int:tid>', view_func=delete_topic, methods=['DELETE'])
 
     app.add_url_rule('/api/questions', view_func=create_question, methods=['POST'])
     app.add_url_rule('/api/questions', view_func=get_questions, methods=['GET'])
@@ -180,6 +241,11 @@ def create_app():
         methods=['POST'],
     )
     app.add_url_rule(
+        '/api/sessions/<int:sid>/title',
+        view_func=patch_session_title,
+        methods=['PATCH'],
+    )
+    app.add_url_rule(
         '/api/sessions/<int:sid>/answers',
         view_func=get_session_answers,
         methods=['GET'],
@@ -198,8 +264,34 @@ def create_app():
     app.add_url_rule('/api/stats/group', view_func=get_group_stats, methods=['GET'])
     app.add_url_rule('/api/analytics/group', view_func=get_group_stat, methods=['GET'])
     app.add_url_rule(
+        '/api/analytics/group/<int:group_id>/students',
+        view_func=get_group_students_metrics,
+        methods=['GET'],
+    )
+    app.add_url_rule(
         '/api/analytics/student/<int:student_id>',
         view_func=get_student_stat,
+        methods=['GET'],
+    )
+
+    app.add_url_rule(
+        '/api/analytics/cluster/<int:group_id>',
+        view_func=post_cluster_run,
+        methods=['POST'],
+    )
+    app.add_url_rule(
+        '/api/analytics/cluster/<int:group_id>/runs',
+        view_func=list_cluster_runs,
+        methods=['GET'],
+    )
+    app.add_url_rule(
+        '/api/analytics/cluster/<int:group_id>/runs/<int:run_id>',
+        view_func=get_cluster_run_detail,
+        methods=['GET'],
+    )
+    app.add_url_rule(
+        '/api/analytics/cluster/<int:group_id>/transitions',
+        view_func=get_cluster_transitions,
         methods=['GET'],
     )
 

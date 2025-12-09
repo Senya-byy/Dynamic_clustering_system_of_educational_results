@@ -9,6 +9,10 @@ services:
       - FLASK_ENV=development
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me}
       - PORT=5000
+      # Ссылка в QR для телефона: IP вашего ПК в Wi‑Fi (не localhost). Пример: http://192.168.1.45:5173
+      - QR_FRONTEND_ORIGIN=${QR_FRONTEND_ORIGIN:-}
+      # Для запросов с телефона добавьте тот же origin в CORS, например: http://192.168.1.45:5173
+      - CORS_ALLOW_LAN=false
       - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
     volumes:
       - ./backend:/app
@@ -24,6 +28,8 @@ services:
       - backend
     environment:
       - VITE_PROXY_TARGET=http://backend:5000
+      # Опционально: тот же URL, что и QR_FRONTEND_ORIGIN, если открываете преподавательскую панель с localhost
+      - VITE_QR_ORIGIN=${VITE_QR_ORIGIN:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules

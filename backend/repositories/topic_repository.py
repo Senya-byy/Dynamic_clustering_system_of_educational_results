@@ -18,3 +18,12 @@ class TopicRepository:
     @staticmethod
     def find_by_id(tid: int) -> Optional[Topic]:
         return Topic.query.get(tid)
+
+    @staticmethod
+    def delete(tid: int) -> bool:
+        t = Topic.query.get(tid)
+        if not t:
+            return False
+        db.session.delete(t)
+        db.session.commit()
+        return True

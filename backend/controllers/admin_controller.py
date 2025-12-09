@@ -58,3 +58,21 @@ def admin_list_teachers(current_user):
         {'id': u.id, 'login': u.login, 'full_name': u.full_name}
         for u in teachers
     ]), 200
+
+
+@token_required
+@role_required(['admin'])
+def admin_delete_user(current_user, uid):
+    try:
+        admin_service.delete_user(current_user['id'], int(uid))
+        return jsonify({'message': 'deleted'}), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@token_required
+@role_required(['admin'])
+def admin_delete_group(current_user, gid):
+    if admin_service.delete_group(int(gid)):
+        return jsonify({'message': 'deleted'}), 200
+    return jsonify({'error': 'Группа не найдена'}), 404

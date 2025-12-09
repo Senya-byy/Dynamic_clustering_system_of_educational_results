@@ -1,11 +1,24 @@
 # backend/repositories/session_repository.py
-from models import db, Session, Group, JoinTicket
+from models import (
+    db,
+    Session,
+    Group,
+    JoinTicket,
+    Answer,
+    Attendance,
+    ClusterResult,
+    Reminder,
+    SessionStudentAssignment,
+    SessionDeviceBinding,
+)
 from datetime import datetime, timedelta
+
+from utils.session_display import format_session_default_title
 import secrets
 import string
 import json
 import random
-from typing import Optional, List
+from typing import List, Optional
 
 
 class SessionRepository:
@@ -37,8 +50,23 @@ class SessionRepository:
             'created_by',
             'timer_seconds',
             'question_pool_json',
+            'start_time',
+            'title',
         }
         row = {k: v for k, v in data.items() if k in allowed}
+        now = datetime.utcnow()
+        if 'start_time' not in row:
+            row['start_time'] = now
+        st = row['start_time']
+        if not isinstance(st, datetime):
+            st = now
+            row['start_time'] = st
+        raw_title = data.get('title')
+        if raw_title is not None and str(raw_title).strip():
+            row['title'] = str(raw_title).strip()[:250]
+        else:
+            row.pop('title', None)
+            row['title'] = format_session_default_title(st)
         sess = Session(**row)
         db.session.add(sess)
         db.session.commit()
@@ -80,6 +108,18 @@ class SessionRepository:
         )
 
     @staticmethod
+    def update_title(sid: int, title: Optional[str]) -> bool:
+        sess = Session.query.get(sid)
+        if not sess:
+            return False
+        if title is None or not str(title).strip():
+            sess.title = None
+        else:
+            sess.title = str(title).strip()[:250]
+        db.session.commit()
+        return True
+
+    @staticmethod
     def update_qr(sid: int, qr_base64: str) -> None:
         sess = Session.query.get(sid)
         if sess:
@@ -116,3 +156,47 @@ class SessionRepository:
         ticket.consumed_at = datetime.utcnow()
         ticket.consumed_by = user_id
         db.session.commit()
+
+    @staticmethod
+    def delete_session_cascade(sid: int) -> bool:
+        sess = Session.query.get(sid)
+        if not sess:
+            return False
+        JoinTicket.query.filter_by(session_id=sid).delete()
+        SessionStudentAssignment.query.filter_by(session_id=sid).delete()
+        SessionDeviceBinding.query.filter_by(session_id=sid).delete()
+        Answer.query.filter_by(session_id=sid).delete()
+        Attendance.query.filter_by(session_id=sid).delete()
+        ClusterResult.query.filter_by(session_id=sid).delete()
+        Reminder.query.filter_by(session_id=sid).delete()
+        db.session.delete(sess)
+        db.session.commit()
+        return True
+
+    @staticmethod
+    def purge_question_from_sessions(qid: int) -> None:
+        """Удаляет сессии с этим вопросом и вычищает id из пулов (перед удалением Question)."""
+        qid = int(qid)
+        for sess in list(Session.query.filter_by(question_id=qid).all()):
+            SessionRepository.delete_session_cascade(sess.id)
+
+        for sess in Session.query.filter(Session.question_pool_json.isnot(None)).all():
+            try:
+                pool = json.loads(sess.question_pool_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(pool, list) or qid not in [int(x) for x in pool]:
+                continue
+            new_pool = [int(x) for x in pool if int(x) != qid]
+            if not new_pool:
+                SessionRepository.delete_session_cascade(sess.id)
+            else:
+                sess.question_pool_json = json.dumps(new_pool)
+                if int(sess.question_id) == qid:
+                    sess.question_id = random.choice(new_pool)
+                db.session.commit()
+
+    @staticmethod
+    def delete_sessions_for_group(group_id: int) -> None:
+        for sess in list(Session.query.filter_by(group_id=group_id).all()):
+            SessionRepository.delete_session_cascade(sess.id)

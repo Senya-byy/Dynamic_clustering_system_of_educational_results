@@ -1,6 +1,7 @@
 # backend/services/question_service.py
 from repositories.question_repository import QuestionRepository
 from repositories.topic_repository import TopicRepository
+from repositories.session_repository import SessionRepository
 from services.recommendation_client import RecommendationClient
 from typing import Dict, List
 
@@ -30,6 +31,9 @@ class QuestionService:
         return self._to_dict(q)
 
     def delete_question(self, qid: int) -> bool:
+        if not self.repo.find_by_id(qid):
+            return False
+        SessionRepository.purge_question_from_sessions(qid)
         return self.repo.delete(qid)
 
     def get_questions_by_teacher(self, teacher_id: int) -> List[dict]:
