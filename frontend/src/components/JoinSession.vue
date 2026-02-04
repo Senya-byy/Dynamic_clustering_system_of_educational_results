@@ -19,6 +19,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
+import { getDeviceId } from '../utils/deviceId'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,7 +34,11 @@ onMounted(async () => {
     return
   }
   try {
-    const res = await api.post('/sessions/verify-ticket', { code, nonce })
+    const res = await api.post('/sessions/verify-ticket', {
+      code,
+      nonce,
+      device_id: getDeviceId()
+    })
     sessionStorage.setItem('active_session_payload', JSON.stringify(res.data))
     router.replace({ path: '/student/quiz', query: { from: 'join' } })
   } catch (e) {

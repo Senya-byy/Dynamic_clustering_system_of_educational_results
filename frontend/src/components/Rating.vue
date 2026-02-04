@@ -10,17 +10,6 @@
       </select>
     </div>
 
-    <div v-if="histogram.length" class="ui-card chart-card">
-      <h3>Распределение баллов</h3>
-      <div class="bars">
-        <div v-for="row in histogram" :key="row.score" class="bar-wrap">
-          <div class="bar" :style="{ height: row.pct + '%' }" :title="String(row.count)" />
-          <span class="lbl">{{ row.score }}</span>
-          <span class="cnt">{{ row.count }}</span>
-        </div>
-      </div>
-    </div>
-
     <div class="ui-card">
       <div class="ui-table-wrap">
         <table class="ui-table">
@@ -56,45 +45,16 @@ const authStore = useAuthStore()
 const rating = ref([])
 const groups = ref([])
 const selectedGroupId = ref('')
-const histData = ref({})
 
 const isTeacherLike = computed(
   () => authStore.role === 'teacher' || authStore.role === 'admin'
 )
 
-const histogram = computed(() => {
-  const h = histData.value || {}
-  const entries = Object.keys(h).map((k) => ({ score: Number(k), count: h[k] }))
-  const maxC = Math.max(1, ...entries.map((e) => e.count))
-  return entries
-    .sort((a, b) => a.score - b.score)
-    .map((e) => ({ ...e, pct: Math.round((e.count / maxC) * 100) }))
-})
-
-const loadRating = async (groupId) => {
-  if (!groupId) return
-  const res = await api.get('/rating/group', { params: { group_id: groupId } })
-  rating.value = res.data
-}
-
-const loadHist = async (groupId) => {
-  if (!groupId || !isTeacherLike.value) {
-    histData.value = {}
-    return
-  }
-  try {
-    const res = await api.get('/analytics/group', { params: { group_id: groupId } })
-    histData.value = res.data.score_histogram || {}
-  } catch {
-    histData.value = {}
-  }
-}
-
 const load = async () => {
   const gid = selectedGroupId.value || authStore.groupId
   if (!gid) return
-  await loadRating(gid)
-  await loadHist(gid)
+  const res = await api.get('/rating/group', { params: { group_id: gid } })
+  rating.value = res.data
 }
 
 onMounted(async () => {
@@ -114,41 +74,6 @@ watch(selectedGroupId, load)
 </script>
 
 <style scoped>
-.chart-card h3 {
-  margin-bottom: 0.5rem;
-}
-.bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.65rem;
-  min-height: 160px;
-  padding: 0.5rem 0 0;
-}
-.bar-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-}
-.bar {
-  width: 100%;
-  max-width: 40px;
-  background: linear-gradient(180deg, #818cf8 0%, var(--accent) 100%);
-  border-radius: 8px 8px 2px 2px;
-  min-height: 6px;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
-}
-.lbl {
-  font-size: 0.75rem;
-  margin-top: 0.35rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-.cnt {
-  font-size: 0.68rem;
-  color: #94a3b8;
-}
 .row-self td {
   background: #eef2ff;
 }

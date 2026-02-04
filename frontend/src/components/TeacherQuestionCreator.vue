@@ -6,7 +6,12 @@
     <div class="ui-card">
       <h3 style="margin-top: 0">Каталог тем</h3>
       <ul class="topic-chips">
-        <li v-for="t in topics" :key="t.id" class="ui-badge ui-badge--accent">{{ t.name }}</li>
+        <li v-for="t in topics" :key="t.id" class="topic-chip">
+          <span class="ui-badge ui-badge--accent">{{ t.name }}</span>
+          <button type="button" class="ui-btn ui-btn--danger ui-btn--ghost chip-del" @click="deleteTopic(t)">
+            Удалить
+          </button>
+        </li>
       </ul>
       <div class="ui-row" style="margin-top: 1rem">
         <input v-model="newTopicName" class="ui-input ui-grow" placeholder="Новая тема" />
@@ -113,6 +118,23 @@ const addTopic = async () => {
   await fetchTopics()
 }
 
+const deleteTopic = async (t) => {
+  if (
+    !confirm(
+      `Удалить тему «${t.name}»? Связь вопросов с этой темой в каталоге будет снята (сами вопросы останутся).`
+    )
+  ) {
+    return
+  }
+  try {
+    await api.delete(`/topics/${t.id}`)
+    await fetchTopics()
+    await fetchQuestions()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось удалить тему')
+  }
+}
+
 const loadRecommendations = async () => {
   const hint = newQuestion.value.topic || ''
   const res = await api.get('/questions/recommendations', { params: { topic: hint } })
@@ -142,9 +164,17 @@ const createQuestion = async () => {
 }
 
 const deleteQuestion = async (id) => {
-  if (confirm('Удалить вопрос?')) {
-    await api.delete(`/questions/${id}`)
-    await fetchQuestions()
+  if (
+    confirm(
+      'Удалить вопрос? Пары (сессии), где он использовался, будут удалены вместе с ответами и билетами QR.'
+    )
+  ) {
+    try {
+      await api.delete(`/questions/${id}`)
+      await fetchQuestions()
+    } catch (e) {
+      alert(e.response?.data?.error || 'Не удалось удалить вопрос')
+    }
   }
 }
 
@@ -173,6 +203,17 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: center;
+}
+.topic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.chip-del {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
 }
 .rec-list {
   margin: 1rem 0 0;

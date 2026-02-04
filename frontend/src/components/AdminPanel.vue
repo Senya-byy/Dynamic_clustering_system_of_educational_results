@@ -39,6 +39,7 @@
               <th>Название</th>
               <th>Преподаватель</th>
               <th>Логин</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -47,6 +48,15 @@
               <td><strong>{{ g.name }}</strong></td>
               <td>{{ g.teacher_id }}</td>
               <td>{{ g.teacher_login }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn--danger ui-btn--ghost"
+                  @click="deleteGroup(g)"
+                >
+                  Удалить
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -114,6 +124,7 @@
               <th>Роль</th>
               <th>ФИО</th>
               <th>Группа</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -123,6 +134,17 @@
               <td><span class="ui-badge ui-badge--accent">{{ u.role }}</span></td>
               <td>{{ u.full_name || '—' }}</td>
               <td>{{ u.group_id ?? '—' }}</td>
+              <td>
+                <button
+                  v-if="canDeleteUser(u)"
+                  type="button"
+                  class="ui-btn ui-btn--danger ui-btn--ghost"
+                  @click="deleteUser(u)"
+                >
+                  Удалить
+                </button>
+                <span v-else class="ui-meta">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -134,6 +156,9 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import api from '../api'
+import { useAuthStore } from '../store/auth'
+
+const authStore = useAuthStore()
 
 const groups = ref([])
 const teachers = ref([])
@@ -165,6 +190,47 @@ const loadGroups = async () => {
 const loadUsers = async () => {
   const res = await api.get('/admin/users')
   users.value = res.data
+}
+
+const canDeleteUser = (u) => {
+  if (u.role === 'admin') return false
+  if (String(u.id) === authStore.userId) return false
+  return true
+}
+
+const deleteGroup = async (g) => {
+  if (
+    !confirm(
+      `Удалить группу «${g.name}»? Будут удалены все пары этой группы и слоты расписания; у учеников поле группы станет пустым.`
+    )
+  ) {
+    return
+  }
+  try {
+    await api.delete(`/admin/groups/${g.id}`)
+    msg.group = { ok: true, text: 'Группа удалена' }
+    await loadGroups()
+    await loadUsers()
+    await loadTeachers()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось удалить группу')
+  }
+}
+
+const deleteUser = async (u) => {
+  const extra =
+    u.role === 'teacher'
+      ? ' У преподавателя удалятся все его группы (и пары), вопросы и темы каталога.'
+      : ' У ученика удалятся ответы и записи посещаемости.'
+  if (!confirm(`Удалить пользователя «${u.login}»?${extra}`)) return
+  try {
+    await api.delete(`/admin/users/${u.id}`)
+    await loadUsers()
+    await loadGroups()
+    await loadTeachers()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось удалить пользователя')
+  }
 }
 
 const createGroup = async () => {

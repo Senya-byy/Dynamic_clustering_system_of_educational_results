@@ -2,7 +2,8 @@
   <div class="page-narrow">
     <h2>Ответ на паре</h2>
     <p class="page-lead">
-      Код и одноразовый nonce с экрана преподавателя (QR обновляется каждую секунду).
+      Код и одноразовый nonce с экрана преподавателя (QR обновляется каждую секунду). Вам назначается свой вопрос;
+      после отправки ответа эту пару по QR пройти снова нельзя.
     </p>
 
     <div v-if="!sessionInfo" class="ui-card">
@@ -43,6 +44,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import api from '../api'
+import { getDeviceId } from '../utils/deviceId'
 import { useRouter, useRoute } from 'vue-router'
 
 const sessionCode = ref('')
@@ -93,7 +95,8 @@ const verifyTicket = async () => {
   try {
     const res = await api.post('/sessions/verify-ticket', {
       code: sessionCode.value.trim(),
-      nonce: nonce.value.trim()
+      nonce: nonce.value.trim(),
+      device_id: getDeviceId()
     })
     sessionInfo.value = res.data
     if (res.data.timer_seconds) {
@@ -115,7 +118,8 @@ const startTimer = () => {
 const submitAnswer = async () => {
   await api.post('/answers/submit', {
     session_code: sessionCode.value.trim(),
-    text: answerText.value
+    text: answerText.value,
+    device_id: getDeviceId()
   })
   answerSubmitted.value = true
   if (timerInterval) clearInterval(timerInterval)
