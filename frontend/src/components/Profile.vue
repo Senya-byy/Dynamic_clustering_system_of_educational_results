@@ -1,0 +1,86 @@
+<template>
+  <div class="page-narrow">
+    <h2>Профиль</h2>
+
+    <div v-if="profile" class="ui-card">
+      <p class="ui-meta"><strong>Логин:</strong> {{ profile.login }}</p>
+      <p class="ui-meta"><strong>Роль:</strong> <span class="ui-badge ui-badge--accent">{{ profile.role }}</span></p>
+
+      <label class="ui-label" for="fn">Полное имя</label>
+      <input id="fn" v-model="profile.full_name" class="ui-input" />
+
+      <p class="ui-label" style="margin-top: 1rem">Приватность в рейтинге</p>
+      <label class="radio-line"><input v-model="profile.privacy_mode" type="radio" :value="true" /> Скрыть имя («Студент N»)</label>
+      <label class="radio-line"><input v-model="profile.privacy_mode" type="radio" :value="false" /> Показывать имя</label>
+
+      <div class="ui-actions">
+        <button type="button" class="ui-btn ui-btn--primary" @click="saveProfile">Сохранить</button>
+      </div>
+    </div>
+
+    <div class="ui-card">
+      <h3>Смена пароля</h3>
+      <label class="ui-label">Текущий пароль</label>
+      <input v-model="pwd.old" class="ui-input" type="password" autocomplete="current-password" />
+      <label class="ui-label">Новый пароль</label>
+      <input v-model="pwd.new" class="ui-input" type="password" autocomplete="new-password" />
+      <div class="ui-actions">
+        <button type="button" class="ui-btn ui-btn--secondary" @click="changePassword">Обновить пароль</button>
+      </div>
+      <p v-if="pwdMsg" class="ui-alert" :class="pwdErr ? 'ui-alert--error' : 'ui-alert--ok'">{{ pwdMsg }}</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import api from '../api'
+import { useAuthStore } from '../store/auth'
+
+const authStore = useAuthStore()
+const profile = ref(null)
+const pwd = ref({ old: '', new: '' })
+const pwdMsg = ref('')
+const pwdErr = ref(false)
+
+const fetchProfile = async () => {
+  const res = await api.get('/auth/profile')
+  profile.value = res.data
+}
+
+const saveProfile = async () => {
+  await api.put('/auth/profile', {
+    full_name: profile.value.full_name,
+    privacy_mode: profile.value.privacy_mode
+  })
+  await authStore.fetchProfile()
+  alert('Профиль обновлён')
+}
+
+const changePassword = async () => {
+  pwdMsg.value = ''
+  pwdErr.value = false
+  try {
+    await api.put('/auth/password', {
+      old_password: pwd.value.old,
+      new_password: pwd.value.new
+    })
+    pwdMsg.value = 'Пароль обновлён'
+    pwd.value = { old: '', new: '' }
+  } catch (e) {
+    pwdErr.value = true
+    pwdMsg.value = e.response?.data?.error || 'Ошибка'
+  }
+}
+
+onMounted(fetchProfile)
+</script>
+
+<style scoped>
+.radio-line {
+  display: block;
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+</style>
