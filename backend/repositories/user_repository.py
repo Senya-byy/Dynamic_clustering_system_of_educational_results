@@ -1,35 +1,46 @@
-from models import db, User
+# backend/repositories/user_repository.py
+from models import db, User, Group
+from typing import Optional, List
 
 class UserRepository:
-    def find_by_login(self, login: str) -> User | None:
+    @staticmethod
+    def find_by_login(login: str) -> Optional[User]:
         return User.query.filter_by(login=login).first()
-    
-    def find_by_id(self, id: int) -> User | None:
-        return User.query.get(id)
-    
-    def find_by_role(self, role: str) -> list[User]:
-        return User.query.filter_by(role=role).all()
-    
-    def create(self, user_data: dict) -> User:
-        user = User(
-            login=user_data['login'],
-            role=user_data['role'],
-            privacy_mode=user_data.get('privacy_mode', False)
-        )
-        user.set_password(user_data['password'])
+
+    @staticmethod
+    def find_by_id(user_id: int) -> Optional[User]:
+        return User.query.get(user_id)
+
+    @staticmethod
+    def find_by_group(group_id: int) -> List[User]:
+        return User.query.filter_by(group_id=group_id, role='student').all()
+
+    @staticmethod
+    def find_by_role(role: str) -> List[User]:
+        return User.query.filter_by(role=role).order_by(User.login).all()
+
+    @staticmethod
+    def list_all() -> List[User]:
+        return User.query.order_by(User.role, User.login).all()
+
+    @staticmethod
+    def create(user_data: dict) -> User:
+        user = User(**user_data)
         db.session.add(user)
         db.session.commit()
         return user
-    
-    def update(self, user_id: int, data: dict) -> User | None:
-        user = self.find_by_id(user_id)
-        if user:
-            for key, value in data.items():
-                if hasattr(user, key) and key != 'password_hash':
-                    setattr(user, key, value)
-            db.session.commit()
+
+    @staticmethod
+    def update(user_id: int, data: dict) -> User:
+        user = User.query.get(user_id)
+        for key, value in data.items():
+            setattr(user, key, value)
+        db.session.commit()
         return user
-    
-    def update_privacy_mode(self, user_id: int, mode: bool) -> bool:
-        user = self.update(user_id, {'privacy_mode': mode})
-        return user is not None
+
+    @staticmethod
+    def update_privacy_mode(user_id: int, mode: bool) -> bool:
+        user = User.query.get(user_id)
+        user.privacy_mode = mode
+        db.session.commit()
+        return True
