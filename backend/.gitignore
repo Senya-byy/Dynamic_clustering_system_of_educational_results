@@ -1,0 +1,63 @@
+# Виртуальное окружение
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Файлы IDE и редакторов
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.bak
+
+# Файлы БД
+*.db
+*.sqlite
+*.sqlite3
+
+# Логи
+*.log
+*.pid
+*.seed
+
+# Конфиги с секретами
+.env
+.env.local
+.env.*.local
+
+# Результаты тестов
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Миграции (если будут)
+alembic/
+migrations/
+
+# Загрузки
+uploads/
+downloads/
+temp/
+tmp/
+
+# Распределенные файлы
+*.egg-info/
+dist/
+build/
