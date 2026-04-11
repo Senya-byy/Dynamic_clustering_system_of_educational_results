@@ -9,7 +9,11 @@ import Rating from '../components/Rating.vue'
 import Profile from '../components/Profile.vue'
 import JoinSession from '../components/JoinSession.vue'
 import TeacherSchedule from '../components/TeacherSchedule.vue'
-import TeacherAnalytics from '../components/TeacherAnalytics.vue'
+import TeacherAnalyticsLayout from '../components/analytics/TeacherAnalyticsLayout.vue'
+import AnalyticsStudentsTab from '../components/analytics/AnalyticsStudentsTab.vue'
+import AnalyticsClusteringTab from '../components/analytics/AnalyticsClusteringTab.vue'
+import AnalyticsClusterMembersTab from '../components/analytics/AnalyticsClusterMembersTab.vue'
+import AnalyticsTransitionsTab from '../components/analytics/AnalyticsTransitionsTab.vue'
 import AdminPanel from '../components/AdminPanel.vue'
 
 const teacherMeta = { roles: ['teacher', 'admin'] }
@@ -23,16 +27,27 @@ const routes = [
   { path: '/teacher/sessions', component: TeacherSessionManager, meta: teacherMeta },
   { path: '/teacher/check', component: TeacherCheckPanel, meta: teacherMeta },
   { path: '/teacher/schedule', component: TeacherSchedule, meta: teacherMeta },
-  { path: '/teacher/analytics', component: TeacherAnalytics, meta: teacherMeta },
+  {
+    path: '/teacher/analytics',
+    component: TeacherAnalyticsLayout,
+    meta: teacherMeta,
+    redirect: '/teacher/analytics/students',
+    children: [
+      { path: 'students', component: AnalyticsStudentsTab, meta: teacherMeta },
+      { path: 'clustering', component: AnalyticsClusteringTab, meta: teacherMeta },
+      { path: 'clusters', component: AnalyticsClusterMembersTab, meta: teacherMeta },
+      { path: 'transitions', component: AnalyticsTransitionsTab, meta: teacherMeta },
+    ],
+  },
   { path: '/student/quiz', component: StudentQuiz, meta: { role: 'student' } },
   { path: '/my-answers', component: MyAnswers, meta: { role: 'student' } },
   { path: '/rating', component: Rating, meta: { roles: ['student', 'teacher', 'admin'] } },
-  { path: '/profile', component: Profile, meta: { roles: ['student', 'teacher', 'admin'] } }
+  { path: '/profile', component: Profile, meta: { roles: ['student', 'teacher', 'admin'] } },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
 
 router.beforeEach((to, from, next) => {
