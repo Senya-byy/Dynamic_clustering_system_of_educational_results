@@ -87,10 +87,13 @@ def get_session_by_code(current_user, code):
 @token_required
 @role_required(['teacher', 'admin'])
 def get_live_qr(current_user, sid):
+    fp = request.args.get('port', type=int)
+    default_port = fp if fp and 1 <= fp <= 65535 else 5173
     try:
         base = resolve_public_frontend_base(
             request.headers.get('X-Frontend-Origin'),
             request.headers.get('Referer'),
+            default_port=default_port,
         )
         if not base:
             base = (request.host_url or '').rstrip('/')

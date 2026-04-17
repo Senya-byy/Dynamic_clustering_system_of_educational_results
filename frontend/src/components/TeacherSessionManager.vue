@@ -121,7 +121,17 @@ const resolveQrOrigin = () => {
   const env = (import.meta.env.VITE_QR_ORIGIN || '').trim()
   if (env) return env
   if (qrFrontendOrigin.value) return qrFrontendOrigin.value
+  const h = window.location.hostname
+  if (h === 'localhost' || h === '127.0.0.1') {
+    return ''
+  }
   return window.location.origin
+}
+
+const frontendDevPort = () => {
+  const p = parseInt(window.location.port, 10)
+  if (p > 0) return p
+  return window.location.protocol === 'https:' ? 443 : 80
 }
 
 const groups = ref([])
@@ -206,7 +216,8 @@ const fetchSessions = async () => {
 const pollQr = async () => {
   if (!activeSessionId.value) return
   const res = await api.get(`/sessions/${activeSessionId.value}/live-qr`, {
-    headers: { 'X-Frontend-Origin': resolveQrOrigin() }
+    params: { port: frontendDevPort() },
+    headers: { 'X-Frontend-Origin': resolveQrOrigin() },
   })
   liveQr.value = res.data.qr_code
   sessionCode.value = res.data.code
