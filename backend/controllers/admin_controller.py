@@ -1,7 +1,10 @@
 # backend/controllers/admin_controller.py
-from flask import request, jsonify
+import os
+
+from flask import abort, request, jsonify
 from services.admin_service import AdminService
 from middleware.auth_middleware import token_required, role_required
+from utils.validation import require_json, get_str
 
 admin_service = AdminService()
 
@@ -76,3 +79,26 @@ def admin_delete_group(current_user, gid):
     if admin_service.delete_group(int(gid)):
         return jsonify({'message': 'deleted'}), 200
     return jsonify({'error': 'Группа не найдена'}), 404
+
+
+def bootstrap_admin():
+    """
+    One-time admin bootstrap for hosted environments without shell access.
+
+    Enabled only when BOOTSTRAP_TOKEN env var is set.
+    Requires header: X-Bootstrap-Token: <token>
+    """
+    token = os.environ.get("BOOTSTRAP_TOKEN")
+    if not token:
+        abort(404)
+    provided = (request.headers.get("X-Bootstrap-Token") or "").strip()
+    if provided != token:
+        return jsonify({"error": "forbidden"}), 403
+
+    data = require_json(request)
+    login = get_str(data, "login", required=True, min_len=1, max_len=80)
+    password = get_str(data, "password", required=True, min_len=4, max_len=200, strip=False)
+    full_name = get_str(data, "full_name", required=False, max_len=200, strip=False)
+
+    row = admin_service.bootstrap_admin(login, password, full_name=full_name)
+    return jsonify(row), 201

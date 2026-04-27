@@ -96,6 +96,32 @@ class AdminService:
             'group_id': u.group_id,
         }
 
+    def bootstrap_admin(self, login: str, password: str, full_name: str | None = None) -> dict:
+        login = (login or "").strip()
+        if not login or not password:
+            raise ValueError("Логин и пароль обязательны")
+        if self.users.find_by_login(login):
+            raise ValueError("Пользователь с таким логином уже есть")
+        # Allow bootstrap only if there is no admin yet.
+        if User.query.filter_by(role="admin").first():
+            raise ValueError("Администратор уже существует")
+        u = User(
+            login=login,
+            role="admin",
+            full_name=(full_name or "").strip() or None,
+            group_id=None,
+        )
+        u.set_password(password)
+        db.session.add(u)
+        db.session.commit()
+        return {
+            "id": u.id,
+            "login": u.login,
+            "role": u.role,
+            "full_name": u.full_name,
+            "group_id": u.group_id,
+        }
+
     def delete_group(self, group_id: int) -> bool:
         g = self.groups.find_by_id(group_id)
         if not g:

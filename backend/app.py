@@ -227,6 +227,7 @@ def create_app():
         admin_list_teachers,
         admin_delete_user,
         admin_delete_group,
+        bootstrap_admin,
     )
 
     app.add_url_rule('/api/meta/qr-origin', view_func=get_qr_origin, methods=['GET'])
@@ -248,6 +249,7 @@ def create_app():
         methods=['DELETE'],
     )
     app.add_url_rule('/api/admin/teachers', view_func=admin_list_teachers, methods=['GET'])
+    app.add_url_rule('/api/admin/bootstrap', view_func=bootstrap_admin, methods=['POST'])
 
     app.add_url_rule('/api/topics', view_func=list_topics, methods=['GET'])
     app.add_url_rule('/api/topics', view_func=create_topic, methods=['POST'])
