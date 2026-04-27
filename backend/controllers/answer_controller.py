@@ -2,6 +2,7 @@
 from flask import request, jsonify
 from services.answer_service import AnswerService
 from middleware.auth_middleware import token_required, role_required
+from utils.validation import require_json, get_str, get_int, get_bool
 
 answer_service = AnswerService()
 
@@ -16,34 +17,33 @@ def my_answers(current_user):
 @token_required
 @role_required(['student'])
 def submit_answer(current_user):
-    data = request.get_json()
-    if not data.get('session_code') or not data.get('text'):
-        return jsonify({'error': 'session_code and text required'}), 400
-    if data.get('device_id') is None or str(data.get('device_id')).strip() == '':
-        return jsonify({'error': 'device_id обязателен. Обновите страницу.'}), 400
-    try:
-        res = answer_service.submit_answer(
-            current_user['id'],
-            data['session_code'],
-            data['text'],
-            str(data['device_id']).strip(),
-        )
-        return jsonify(res), 201
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+    data = require_json(request)
+    session_code = get_str(data, "session_code", required=True, min_len=1, max_len=32)
+    text = get_str(data, "text", required=True, min_len=1, max_len=10000, strip=False)
+    device_id = get_str(
+        data,
+        "device_id",
+        required=True,
+        min_len=1,
+        max_len=256,
+    )
+
+    res = answer_service.submit_answer(
+        current_user["id"],
+        session_code,
+        text,
+        device_id,
+    )
+    return jsonify(res), 201
 
 
 @token_required
 @role_required(['teacher', 'admin'])
 def grade_answer(current_user, aid):
-    data = request.get_json()
-    if 'score' not in data:
-        return jsonify({'error': 'score required'}), 400
-    score = data['score']
-    comment = data.get('comment', '')
-    is_correct = data.get('is_correct')
-    if is_correct is not None:
-        is_correct = bool(is_correct)
+    data = require_json(request)
+    score = get_int(data, "score", required=True, min_value=0, max_value=10_000)
+    comment = get_str(data, "comment", required=False, max_len=10_000, strip=False) or ""
+    is_correct = get_bool(data, "is_correct")
     res = answer_service.grade_answer(
         int(aid), score, comment, current_user['id'], is_correct=is_correct
     )

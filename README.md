@@ -45,6 +45,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
+## Деплой (PythonAnywhere)
+Backend деплоится как WSGI-приложение, см. [`docs/DEPLOY_PYTHONANYWHERE.md`](docs/DEPLOY_PYTHONANYWHERE.md).
+
 ## Документация
 Файлы в `docs/`:
 - `ARCHITECTURE_PROJECT.md` — архитектура, API, QR/LAN, кластеризация, миграции

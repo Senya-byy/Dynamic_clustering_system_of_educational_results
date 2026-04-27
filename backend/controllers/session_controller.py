@@ -4,26 +4,32 @@ from utils.lan_hosts import resolve_public_frontend_base
 from services.session_service import SessionService
 from repositories.group_repository import GroupRepository
 from middleware.auth_middleware import token_required, role_required
+from utils.validation import require_json, get_int, get_str
 
 session_service = SessionService()
 group_repo = GroupRepository()
 
 
 def _topic_ids_from_payload(payload: dict) -> list:
-    ids = []
-    raw_single = payload.get('topic_id')
-    if raw_single is not None and raw_single != '':
+    ids: list[int] = []
+    raw_single = payload.get("topic_id")
+    if raw_single is not None and raw_single != "":
         try:
             ids.append(int(raw_single))
         except (TypeError, ValueError):
-            pass
-    raw_list = payload.get('topic_ids')
+            raise ValueError("topic_id должен быть целым числом")
+
+    raw_list = payload.get("topic_ids")
+    if raw_list is not None and not isinstance(raw_list, list):
+        raise ValueError("topic_ids должен быть списком")
     if isinstance(raw_list, list):
         for x in raw_list:
+            if x is None or x == "":
+                continue
             try:
                 ids.append(int(x))
             except (TypeError, ValueError):
-                pass
+                raise ValueError("topic_ids должен содержать только целые числа")
     seen = set()
     out = []
     for i in ids:
@@ -36,10 +42,8 @@ def _topic_ids_from_payload(payload: dict) -> list:
 @token_required
 @role_required(['teacher', 'admin'])
 def create_session(current_user):
-    data = request.get_json() or {}
-    if not data.get('group_id'):
-        return jsonify({'error': 'group_id обязателен'}), 400
-    gid = int(data['group_id'])
+    data = require_json(request)
+    gid = get_int(data, "group_id", required=True, min_value=1)
     g = group_repo.find_by_id(gid)
     if not g:
         return jsonify({'error': 'Группа не найдена'}), 404
@@ -51,10 +55,7 @@ def create_session(current_user):
         if data.get('question_ids'):
             return jsonify({'error': 'Нельзя одновременно передавать topic_ids и question_ids'}), 400
         owner = g.teacher_id if current_user['role'] == 'admin' else current_user['id']
-        try:
-            data['question_ids'] = session_service.question_ids_from_topic_ids(topic_ids, owner)
-        except ValueError as e:
-            return jsonify({'error': str(e)}), 400
+        data['question_ids'] = session_service.question_ids_from_topic_ids(topic_ids, owner)
     data.pop('topic_id', None)
     data.pop('topic_ids', None)
 
@@ -65,13 +66,18 @@ def create_session(current_user):
             }
         ), 400
     data['created_by'] = current_user['id']
+    # Validate optional fields early (keep keys/shape for service).
+    if "timer_seconds" in data and data.get("timer_seconds") not in (None, ""):
+        get_int(data, "timer_seconds", required=False, min_value=1, max_value=24 * 60 * 60)
+    if "title" in data:
+        raw_title = data.get("title")
+        if raw_title is not None:
+            get_str(data, "title", required=False, max_len=250, strip=False)
+
     if data.get('question_ids'):
         data.pop('question_id', None)
-    try:
-        sess = session_service.create_session(data)
-        return jsonify(sess), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    sess = session_service.create_session(data)
+    return jsonify(sess), 201
 
 
 @token_required
@@ -110,25 +116,24 @@ def get_live_qr(current_user, sid):
 @token_required
 @role_required(['student'])
 def verify_join_ticket(current_user):
-    data = request.get_json() or {}
-    code, nonce = data.get('code'), data.get('nonce')
-    device_id = data.get('device_id')
-    if not code or not nonce:
-        return jsonify({'error': 'code и nonce обязательны'}), 400
-    if device_id is None or str(device_id).strip() == '':
-        return jsonify({'error': 'device_id обязателен. Обновите страницу (кэш браузера).'}), 400
-    try:
-        payload = session_service.verify_join_ticket(
-            str(code).strip(),
-            str(nonce).strip(),
-            current_user['id'],
-            str(device_id).strip(),
-        )
-        return jsonify(payload), 200
-    except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+    data = require_json(request)
+    code = get_str(data, "code", required=True, min_len=1, max_len=32)
+    nonce = get_str(data, "nonce", required=True, min_len=1, max_len=128)
+    device_id = get_str(
+        data,
+        "device_id",
+        required=True,
+        min_len=1,
+        max_len=256,
+    )
+
+    payload = session_service.verify_join_ticket(
+        code,
+        nonce,
+        current_user["id"],
+        device_id,
+    )
+    return jsonify(payload), 200
 
 
 @token_required

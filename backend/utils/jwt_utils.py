@@ -1,6 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
 from flask import current_app
+import logging
 
 def create_token(user_id: int, login: str, role: str) -> str:
     payload = {
@@ -12,11 +13,12 @@ def create_token(user_id: int, login: str, role: str) -> str:
     return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256')
 
 def decode_token(token: str) -> dict | None:
+    logger = logging.getLogger("classqr.jwt")
     try:
         return jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
     except jwt.ExpiredSignatureError:
-        print("Token expired")
+        logger.info("Token expired")
         return None
     except jwt.InvalidTokenError as e:
-        print(f"Invalid token: {e}")
+        logger.info("Invalid token: %s", e)
         return None

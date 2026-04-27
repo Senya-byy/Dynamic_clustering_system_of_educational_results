@@ -1,10 +1,12 @@
 # backend/app.py
 import os
+import logging
 from flask import Flask
 from sqlalchemy.exc import OperationalError
 from config import Config
 from models import db
 from utils.lan_hosts import vite_lan_cors_origins
+from utils.error_handlers import register_error_handlers
 
 
 def seed_data():
@@ -86,11 +88,17 @@ def _ensure_sqlite_migrations():
         if 'question_id' not in cols:
             with db.engine.begin() as conn:
                 conn.execute(text('ALTER TABLE answers ADD COLUMN question_id INTEGER'))
+        if 'is_late' not in cols:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE answers ADD COLUMN is_late BOOLEAN DEFAULT 0'))
     if 'sessions' in tables:
         scols = {c['name'] for c in insp.get_columns('sessions')}
         if 'title' not in scols:
             with db.engine.begin() as conn:
                 conn.execute(text('ALTER TABLE sessions ADD COLUMN title VARCHAR(250)'))
+        if 'question_pool_json' not in scols:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE sessions ADD COLUMN question_pool_json TEXT'))
     if 'cluster_runs' in tables:
         crc = {c['name'] for c in insp.get_columns('cluster_runs')}
         if 'silhouette_score' not in crc:
@@ -103,13 +111,35 @@ def create_app():
     app.config.from_object(Config)
     from flask_cors import CORS
 
-    origins = os.environ.get(
-        'CORS_ORIGINS',
-        'http://localhost:5173,http://localhost:5174,'
-        'http://127.0.0.1:5173,http://127.0.0.1:5174',
-    ).split(',')
-    origins = [o.strip() for o in origins if o.strip()]
-    if os.environ.get('CORS_ALLOW_LAN', 'true').lower() in ('1', 'true', 'yes'):
+    app_env = (os.environ.get("APP_ENV") or os.environ.get("FLASK_ENV") or "development").lower()
+
+    logging.basicConfig(
+        level=logging.INFO if app_env == "production" else logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    logging.getLogger("werkzeug").setLevel(logging.INFO)
+
+    register_error_handlers(app)
+
+    cors_origins_raw = os.environ.get("CORS_ORIGINS")
+    if cors_origins_raw is None:
+        # Safe-by-default:
+        # - dev: allow localhost + optional LAN
+        # - prod: allow nothing unless explicitly configured
+        if app_env == "production":
+            origins = []
+        else:
+            origins = [
+                "http://localhost:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:5174",
+            ]
+    else:
+        origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+
+    cors_allow_lan_default = "false" if app_env == "production" else "true"
+    if os.environ.get("CORS_ALLOW_LAN", cors_allow_lan_default).lower() in ("1", "true", "yes"):
         seen = set(origins)
         for o in vite_lan_cors_origins():
             if o not in seen:
@@ -125,15 +155,24 @@ def create_app():
     db.init_app(app)
 
     with app.app_context():
-        db.create_all()
-        _ensure_sqlite_migrations()
-        try:
-            seed_data()
-        except OperationalError:
-            db.drop_all()
+        # In tests, DB lifecycle is owned by the test suite.
+        if app_env != "test":
             db.create_all()
             _ensure_sqlite_migrations()
-            seed_data()
+            try:
+                seed_enabled_default = "false" if app_env == "production" else "true"
+                if os.environ.get("SEED_DATA", seed_enabled_default).lower() in ("1", "true", "yes"):
+                    seed_data()
+            except OperationalError:
+                # In dev, rebuilding DB can be acceptable. In production, never drop data.
+                if app_env != "production":
+                    db.drop_all()
+                    db.create_all()
+                    _ensure_sqlite_migrations()
+                    if os.environ.get("SEED_DATA", "true").lower() in ("1", "true", "yes"):
+                        seed_data()
+                else:
+                    raise
 
     from controllers.meta_controller import get_qr_origin
     from controllers.auth_controller import auth_bp
@@ -318,10 +357,28 @@ def create_app():
         methods=['POST'],
     )
 
+    @app.get("/health")
+    def health():
+        # Deep-ish healthcheck: app + DB connectivity.
+        from sqlalchemy import text
+
+        try:
+            db.session.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception:
+            db_ok = False
+        status = 200 if db_ok else 503
+        return {
+            "status": "ok" if db_ok else "degraded",
+            "db": "ok" if db_ok else "error",
+            "env": app_env,
+        }, status
+
     return app
 
 
-app = create_app()
+_env_for_import = (os.environ.get("APP_ENV") or os.environ.get("FLASK_ENV") or "development").lower()
+app = None if _env_for_import == "test" else create_app()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', '5000'))

@@ -8,14 +8,21 @@ services:
       - "${BACKEND_PORT:-5001}:5001"
     environment:
       - PORT=5001
+      - APP_ENV=${APP_ENV:-development}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me}
       - DATABASE_URL=${DATABASE_URL:-sqlite:///classqr.db}
-      - QR_FRONTEND_ORIGIN=${QR_FRONTEND_ORIGIN:-}
+      - SEED_DATA=${SEED_DATA:-true}
+      - QR_FRONTEND_ORIGIN=${QR_FRONTEND_ORIGIN:-https://SenyaByy.pythonanywhere.com}
       - CORS_ALLOW_LAN=${CORS_ALLOW_LAN:-true}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://SenyaByy.pythonanywhere.com}
     volumes:
       - backend_data:/app/instance
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; p=os.environ.get('PORT','5001'); urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=2).read(); print('ok')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
   frontend:
     image: nginx:alpine
@@ -25,6 +32,11 @@ services:
       - "${FRONTEND_PORT:-80}:80"
     volumes:
       - ../frontend/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   backend_data:

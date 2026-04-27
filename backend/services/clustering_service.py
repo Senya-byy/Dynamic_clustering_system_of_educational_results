@@ -32,7 +32,21 @@ def _kmeans_labels(
     max_iter: int = 200,
 ) -> np.ndarray:
     """K-means (Ллойд) только на NumPy, без sklearn/pandas."""
+    X = np.asarray(X, dtype=np.float64, order="C")
+    if X.ndim != 2:
+        raise ValueError("X должен быть двумерной матрицей")
     n, d = X.shape
+    if n == 0:
+        return np.zeros((0,), dtype=np.int32)
+    if k <= 0:
+        raise ValueError("k должен быть >= 1")
+    if k >= n:
+        raise ValueError("k должен быть < числа студентов")
+    if not np.isfinite(X).all():
+        raise ValueError("Матрица признаков содержит NaN/inf")
+    if np.allclose(X, X[0], rtol=1e-9, atol=1e-12):
+        return np.zeros(n, dtype=np.int32)
+
     rng = np.random.RandomState(random_state)
     best_inertia = np.inf
     best_labels: np.ndarray | None = None
@@ -40,35 +54,46 @@ def _kmeans_labels(
         cent_idx = rng.choice(n, size=k, replace=False)
         centroids = X[cent_idx].copy()
         labels = np.zeros(n, dtype=np.int32)
+        x2 = np.einsum("ij,ij->i", X, X)[:, None]
         for _ in range(max_iter):
-            dists = np.sum((X[:, np.newaxis, :] - centroids[np.newaxis, :, :]) ** 2, axis=2)
-            labels = np.argmin(dists, axis=1).astype(np.int32)
-            new_c = np.zeros_like(centroids)
-            for j in range(k):
-                mask = labels == j
-                if np.any(mask):
-                    new_c[j] = X[mask].mean(axis=0)
-                else:
-                    new_c[j] = X[rng.randint(n)]
-            if np.allclose(new_c, centroids, rtol=1e-5, atol=1e-8):
-                centroids = new_c
+            c2 = np.einsum("ij,ij->i", centroids, centroids)[None, :]
+            d2 = np.maximum(x2 + c2 - 2.0 * (X @ centroids.T), 0.0)
+            new_labels = d2.argmin(axis=1).astype(np.int32, copy=False)
+            if np.array_equal(new_labels, labels):
+                labels = new_labels
                 break
+            labels = new_labels
+
+            counts = np.bincount(labels, minlength=k).astype(np.int64, copy=False)
+            sums = np.zeros((k, d), dtype=np.float64)
+            for t in range(d):
+                sums[:, t] = np.bincount(labels, weights=X[:, t], minlength=k)
+            new_c = centroids.copy()
+            non_empty = counts > 0
+            new_c[non_empty] = sums[non_empty] / counts[non_empty, None]
+
+            empty = np.where(~non_empty)[0]
+            if empty.size:
+                new_c[empty] = X[rng.randint(0, n, size=empty.size)]
             centroids = new_c
-        dists = np.sum((X[:, np.newaxis, :] - centroids[np.newaxis, :, :]) ** 2, axis=2)
-        inertia = float(dists[np.arange(n), labels].sum())
+
+        c2 = np.einsum("ij,ij->i", centroids, centroids)[None, :]
+        d2 = np.maximum(x2 + c2 - 2.0 * (X @ centroids.T), 0.0)
+        inertia = float(d2[np.arange(n), labels].sum())
         if inertia < best_inertia:
             best_inertia = inertia
             best_labels = labels.copy()
     return best_labels if best_labels is not None else np.zeros(n, dtype=np.int32)
 
 
-def _silhouette_mean(X: np.ndarray, labels: np.ndarray) -> float:
+def _silhouette_mean(X: np.ndarray, labels: np.ndarray, *, dist: np.ndarray | None = None) -> float:
     """Средний коэффициент силуэта (евклидова метрика)."""
     n = X.shape[0]
     uniq = np.unique(labels)
     if len(uniq) < 2 or n < 2:
         return -1.0
-    dist = np.sqrt(_pairwise_euclidean(X))
+    if dist is None:
+        dist = np.sqrt(_pairwise_euclidean(X))
     scores: List[float] = []
     for i in range(n):
         li = labels[i]
@@ -205,14 +230,38 @@ def build_feature_matrix(group_id: int, student_ids: List[int]) -> List[List[flo
     n_feat = len(FEATURE_KEYS)
     raw_rows: List[List[float]] = []
 
-    questions_cache: dict[int, Question | None] = {}
+    # Batch-load attendance late status for all students/sessions to avoid N+1 queries.
+    late_att_by_student: dict[int, set[int]] = defaultdict(set)
+    if session_ids:
+        att_rows = (
+            Attendance.query.filter(
+                Attendance.session_id.in_(session_ids),
+                Attendance.student_id.in_(student_ids),
+            ).all()
+        )
+        for att in att_rows:
+            if (att.status or "").lower() == "late":
+                late_att_by_student[int(att.student_id)].add(int(att.session_id))
+
+    # Batch-load all questions referenced by answers/sessions.
+    qids: set[int] = set()
+    for sid in student_ids:
+        for ans in answers_by.get(sid, []):
+            if ans.question_id:
+                qids.add(int(ans.question_id))
+            else:
+                sess = sess_by_id.get(ans.session_id)
+                if sess and sess.question_id:
+                    qids.add(int(sess.question_id))
+    questions_by_id: dict[int, Question] = {}
+    if qids:
+        for q in Question.query.filter(Question.id.in_(qids)).all():
+            questions_by_id[int(q.id)] = q
 
     def get_q(qid: int | None) -> Question | None:
         if qid is None:
             return None
-        if qid not in questions_cache:
-            questions_cache[qid] = Question.query.get(qid)
-        return questions_cache[qid]
+        return questions_by_id.get(int(qid))
 
     for sid in student_ids:
         answers = answers_by.get(sid, [])
@@ -258,7 +307,11 @@ def build_feature_matrix(group_id: int, student_ids: List[int]) -> List[List[flo
 
         avg = sum(scores) / len(scores) if scores else 0.0
         share70 = passed / graded if graded else 0.0
-        late_c = _late_session_count(sid, session_ids, answers)
+        late_sessions = set(late_att_by_student.get(int(sid), set()))
+        for ans in answers:
+            if ans.session_id in session_ids and ans.is_late:
+                late_sessions.add(int(ans.session_id))
+        late_c = len(late_sessions)
 
         vec = [
             float(total),
@@ -287,22 +340,31 @@ def _choose_k(X_scaled: np.ndarray, n_samples: int) -> int:
     best_k = 3
     best_score = -1.0
     upper = min(8, n_samples - 1)
+    # Compute distances once for silhouette to avoid repeated O(n^2).
+    # For very large groups, compute silhouette on a deterministic subsample.
+    X_for_sil = X_scaled
+    dist = None
+    if n_samples > 250:
+        rng = np.random.RandomState(42)
+        idx = rng.choice(n_samples, size=250, replace=False)
+        X_for_sil = X_scaled[idx]
+        dist = np.sqrt(_pairwise_euclidean(X_for_sil))
+    else:
+        dist = np.sqrt(_pairwise_euclidean(X_scaled))
     for k in range(3, upper + 1):
         if k >= n_samples:
             break
         labels = _kmeans_labels(X_scaled, k, random_state=42, n_init=10)
         if len(np.unique(labels)) < 2:
             continue
-        sc = _silhouette_mean(X_scaled, labels)
+        if n_samples > 250:
+            sc = _silhouette_mean(X_for_sil, labels[idx], dist=dist)
+        else:
+            sc = _silhouette_mean(X_scaled, labels, dist=dist)
         if sc > best_score:
             best_score = sc
             best_k = k
     return best_k
-
-
-def _final_labels(X_raw: np.ndarray, k: int) -> np.ndarray:
-    Xs = _standard_scale(X_raw)
-    return _kmeans_labels(Xs, k, random_state=42, n_init=15)
 
 
 def cluster_payload_for_group(
@@ -321,8 +383,14 @@ def cluster_payload_for_group(
     raw_rows = build_feature_matrix(group_id, student_ids)
     X = np.asarray(raw_rows, dtype=np.float64)
     X_scaled = _standard_scale(X)
-    k = _choose_k(X_scaled, n)
-    labels = _final_labels(X, k)
+    if not np.isfinite(X_scaled).all():
+        raise ValueError("Признаки содержат NaN/inf")
+    if np.allclose(X_scaled, X_scaled[0], rtol=1e-9, atol=1e-12):
+        labels = np.zeros(n, dtype=np.int32)
+        k = 1
+    else:
+        k = _choose_k(X_scaled, n)
+        labels = _kmeans_labels(X_scaled, k, random_state=42, n_init=15)
 
     clusters_map: dict[int, List[int]] = defaultdict(list)
     for idx, lab in enumerate(labels.tolist()):
