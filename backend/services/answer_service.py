@@ -115,6 +115,7 @@ class AnswerService:
                 'score': a.score,
                 'is_correct': a.is_correct,
                 'comment': a.comment,
+                'checked_at': a.checked_at.isoformat() if a.checked_at else None,
                 'submitted_at': a.submitted_at.isoformat() if a.submitted_at else None,
                 'is_late': a.is_late,
                 'max_score': max_score,

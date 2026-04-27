@@ -32,22 +32,8 @@ Thumbs.db
 # Env
 .env
 
-# Python
-__pycache__/
-*.py[cod]
-*.so
-.Python
-venv/
-.venv/
-env/
-*.db
-*.sqlite
-
-# Node / Frontend
-node_modules/
-dist/
-dist-ssr/
-*.local
+# Test caches
+.pytest_cache/
 
 # IDE
 .vscode/
@@ -56,6 +42,6 @@ dist-ssr/
 .DS_Store
 *.log
 
-# Environment
-.env
+# Local env files (in addition to .env above)
 .env.local
+.env.*.local

@@ -13,11 +13,39 @@
       </select>
     </div>
 
-    <div v-for="ans in answers" :key="ans.id" class="ui-card answer-card">
+    <div v-if="selectedSessionId" class="ui-card ui-card--muted" style="margin-bottom: 1rem">
+      <div class="ui-actions" style="justify-content: space-between; gap: 0.75rem; flex-wrap: wrap">
+        <div class="ui-meta" style="margin: 0">
+          Непроверено: <strong>{{ pendingAnswers.length }}</strong>
+          · Проверено: <strong>{{ reviewedAnswers.length }}</strong>
+        </div>
+        <div class="ui-actions" style="margin: 0; gap: 0.5rem">
+          <button
+            type="button"
+            class="ui-btn"
+            :class="tab === 'pending' ? 'ui-btn--primary' : ''"
+            @click="tab = 'pending'"
+          >
+            Непроверено
+          </button>
+          <button
+            type="button"
+            class="ui-btn"
+            :class="tab === 'reviewed' ? 'ui-btn--primary' : ''"
+            @click="tab = 'reviewed'"
+          >
+            Проверено
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-for="ans in visibleAnswers" :key="ans.id" class="ui-card answer-card">
       <p class="head-line">
         <strong>{{ ans.student_name }}</strong>
         <span class="ui-meta" style="margin: 0"> · {{ ans.submitted_at }}</span>
         <span v-if="ans.is_late" class="ui-badge" style="margin-left: 0.5rem">Опоздание</span>
+        <span v-if="ans.checked_at || ans._justReviewed" class="ui-badge" style="margin-left: 0.5rem">Проверено</span>
       </p>
 
       <div class="question-block">
@@ -49,12 +77,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import api from '../api'
 
 const sessions = ref([])
 const selectedSessionId = ref('')
 const answers = ref([])
+const tab = ref('pending')
 
 const fetchSessions = async () => {
   const res = await api.get('/sessions/teacher')
@@ -65,14 +94,30 @@ const loadAnswers = async () => {
   if (!selectedSessionId.value) return
   const res = await api.get(`/sessions/${selectedSessionId.value}/answers`)
   answers.value = res.data
+  tab.value = 'pending'
 }
 
+const isReviewed = (ans) => Boolean(ans.checked_at || ans._justReviewed)
+
+const pendingAnswers = computed(() => answers.value.filter((a) => !isReviewed(a)))
+const reviewedAnswers = computed(() => answers.value.filter((a) => isReviewed(a)))
+
+const visibleAnswers = computed(() => {
+  return tab.value === 'reviewed' ? reviewedAnswers.value : pendingAnswers.value
+})
+
 const gradeAnswer = async (ans) => {
-  await api.post(`/answers/${ans.id}/grade`, {
+  const res = await api.post(`/answers/${ans.id}/grade`, {
     score: ans.score,
     comment: ans.comment || '',
     is_correct: ans.is_correct
   })
+
+  // UX: сразу убираем из "Непроверено" в "Проверено" без перезагрузки списка
+  ans._justReviewed = true
+  if (res?.data?.checked_at) {
+    ans.checked_at = res.data.checked_at
+  }
 }
 
 const quickGrade = async (ans, ok) => {

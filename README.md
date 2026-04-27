@@ -45,6 +45,15 @@ cp .env.example .env
 docker compose up --build
 ```
 
+## Деплой (Render)
+Если деплоите на Render (frontend + backend + DB):
+- backend: Render Web Service (желательно с Postgres вместо SQLite)
+- frontend: Render **Static Site**
+- важно для SPA (Vue Router `createWebHistory()`): добавьте правило **Redirects/Rewrites**  
+  `/*` → `/index.html` (**Rewrite**), иначе при обновлении страницы будет 404.
+
+См. [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md).
+
 ## Деплой (PythonAnywhere)
 Backend деплоится как WSGI-приложение, см. [`docs/DEPLOY_PYTHONANYWHERE.md`](docs/DEPLOY_PYTHONANYWHERE.md).
 
@@ -57,6 +66,8 @@ Backend деплоится как WSGI-приложение, см. [`docs/DEPLOY
 - `CHECKLIST_RELEASE.md` — регресс перед релизом
 - `CHECKLIST_MOBILE_LAN.md` — мобильный чек-лист
 - `MIN_TESTS.md` — минимальные автотесты (план)
+- `DEPLOY_RENDER.md` — деплой на Render (frontend static + backend + DB)
+- `TESTING_MANUAL_STATIC.md` — статическое и ручное динамическое тестирование
 
 ## Бейджи
 - Status: `active (edu)`
