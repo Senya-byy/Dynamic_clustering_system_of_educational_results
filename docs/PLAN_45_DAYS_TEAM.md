@@ -19,7 +19,7 @@
 ## 2) Критерии приёмки по неделям (Definition of Success)
 
 ### Неделя 1 — LAN/QR стабилизация
-- Телефон открывает ссылку из QR **≤ 2 секунды** в одной Wi‑Fi сети.
+- Телефон открывает ссылку из QR **≤ 2 секунды** в production (публичный URL).
 - `nonce` живёт **~3.5 сек**, повторный/просроченный nonce даёт понятную ошибку.
 - `device binding` работает: одно устройство не может «перепривязаться» к другому логину в рамках сессии.
 
@@ -55,15 +55,15 @@
 
 ### Неделя 1 (Дни 1–7): Запуск + QR/LAN
 **День 1–2**
-- Timlid: `scripts/dev.sh` / `scripts/dev.bat`, проверка портов, вывод LAN URL.
-- Tester: подготовка матрицы устройств (Android/iOS) + тестовая сеть (роутер/точка доступа).
+- Timlid: проверка production URL (frontend/backend), базовый smoke `/health`, настройка SPA rewrite на фронте.
+- Tester: подготовка матрицы устройств (Android/iOS) и ручной прогон QR сценария на сайте.
 
 **День 3–4**
 - Architect: правила origin для QR (`QR_FRONTEND_ORIGIN`, `X-Frontend-Origin`, `meta/qr-origin`), CORS_allow_lan.
 - Timlid: фиксы «localhost в QR», прокси и заголовки.
 
 **День 5**
-- Tester: чек-лист `CHECKLIST_MOBILE_LAN.md`, первые дефекты P0/P1.
+- Tester: чек-лист `CHECKLIST_MOBILE_PROD.md`, первые дефекты P0/P1.
 
 **День 6–7**
 - Timlid+Architect: закрытие P0/P1 по QR/LAN.

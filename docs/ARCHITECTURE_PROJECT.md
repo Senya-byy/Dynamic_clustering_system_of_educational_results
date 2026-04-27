@@ -45,7 +45,7 @@
 
 **Внешние зависимости**
 - смартфоны/браузеры (сканирование QR);
-- локальная сеть Wi‑Fi (LAN): телефон должен открыть **IP ноутбука**, не `localhost`.
+- hosting (Render) и публичный домен (frontend + backend);
 
 ## 4. C4 — Уровень 2 (Контейнеры)
 
@@ -57,14 +57,14 @@
 ### 4.2 Frontend (Vue SPA)
 - В dev: Vite dev server (обычно **5173**)
 - Отдаёт SPA и ходит в API через `/api` (прокси на backend)
-- Для QR ссылка должна быть вида `http://<LAN-IP>:5173/join?...`
+- В production QR ссылка должна вести на публичный домен фронта (`https://<frontend>.onrender.com/join?...`)
 
 Примечание про прод (Static hosting / Render):
 - Роутер использует history mode (`createWebHistory()`), поэтому хостинг статики должен уметь **rewrite** неизвестных путей на `index.html`.
 - Для Render Static Site это делается правилом `/*` → `/index.html` (Rewrite). См. `docs/DEPLOY_RENDER.md`.
 
 ### 4.3 База данных
-SQLite через SQLAlchemy. Для существующей БД «ручные миграции» выполняются в `_ensure_sqlite_migrations()` (см. раздел «Миграции»).
+В production используется **Render PostgreSQL** (подключение через `DATABASE_URL`). Локально для разработки/тестов может использоваться SQLite.
 
 ## 5. C4 — Уровень 3 (Компоненты backend)
 
@@ -114,7 +114,7 @@ sequenceDiagram
   actor S as Student (Phone)
   participant FE as Frontend (Vue)
   participant BE as Backend (Flask API)
-  participant DB as DB (SQLite)
+  participant DB as DB (PostgreSQL)
 
   T->>FE: Открывает /teacher/sessions
   FE->>BE: GET /api/sessions/teacher (JWT)
@@ -174,7 +174,7 @@ sequenceDiagram
 ### 8.2 GET `/api/sessions/{id}/live-qr`
 **Request**
 - query: `port=5173`
-- header: `X-Frontend-Origin: http://192.168.1.37:5173` (если фронт открыт по LAN)
+- header: `X-Frontend-Origin: https://<frontend>.onrender.com` (production)
 
 **200 Response**
 ```json
@@ -183,7 +183,7 @@ sequenceDiagram
   "code": "AB12CD",
   "nonce": "random_nonce",
   "expires_in_seconds": 3,
-  "join_url": "http://192.168.1.37:5173/join?code=AB12CD&nonce=...",
+  "join_url": "https://<frontend>.onrender.com/join?code=AB12CD&nonce=...",
   "qr_code": "data:image/png;base64,iVBORw0K..."
 }
 ```

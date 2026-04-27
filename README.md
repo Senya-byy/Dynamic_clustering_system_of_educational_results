@@ -54,17 +54,14 @@ docker compose up --build
 
 См. [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md).
 
-## Деплой (PythonAnywhere)
-Backend деплоится как WSGI-приложение, см. [`docs/DEPLOY_PYTHONANYWHERE.md`](docs/DEPLOY_PYTHONANYWHERE.md).
-
 ## Документация
 Файлы в `docs/`:
 - `ARCHITECTURE_PROJECT.md` — архитектура, API, QR/LAN, кластеризация, миграции
 - `PLAN_45_DAYS_TEAM.md` — план на 45 дней (тимлид/архитектор/тестировщик)
-- `RUNBOOK_LAN_QR.md` — пошаговый запуск и диагностика проблем с телефоном
+- `RUNBOOK_QR.md` — пошаговая проверка QR в production (Render)
 - `API_EXAMPLES.md` — curl и примеры JSON
 - `CHECKLIST_RELEASE.md` — регресс перед релизом
-- `CHECKLIST_MOBILE_LAN.md` — мобильный чек-лист
+- `CHECKLIST_MOBILE_PROD.md` — мобильный чек-лист (production)
 - `MIN_TESTS.md` — минимальные автотесты (план)
 - `DEPLOY_RENDER.md` — деплой на Render (frontend static + backend + DB)
 - `TESTING_MANUAL_STATIC.md` — статическое и ручное динамическое тестирование

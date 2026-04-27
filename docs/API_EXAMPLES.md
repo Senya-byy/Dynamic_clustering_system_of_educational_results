@@ -1,15 +1,15 @@
 # API_EXAMPLES — примеры запросов/ответов
 
-Все примеры ниже предполагают:
-- backend: `http://127.0.0.1:5001`
-- frontend: проксирует `/api` на backend (в dev)
+Все примеры ниже предполагают production на Render:
+- backend: `https://<ваш-backend>.onrender.com`
+- frontend: `https://classqr-frontend.onrender.com`
 
-Если используете curl напрямую в backend — подставляйте base `http://127.0.0.1:5001/api`.
+Если используете curl напрямую в backend — подставляйте base `https://<ваш-backend>.onrender.com/api`.
 
 ## 1) POST `/api/auth/login`
 
 ```bash
-curl -s -X POST "http://127.0.0.1:5001/api/auth/login" \
+curl -s -X POST "https://<ваш-backend>.onrender.com/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"login":"teacher","password":"teacher123"}'
 ```
@@ -26,7 +26,7 @@ curl -s -X POST "http://127.0.0.1:5001/api/auth/login" \
 ## 2) GET `/api/sessions/teacher`
 
 ```bash
-curl -s "http://127.0.0.1:5001/api/sessions/teacher" \
+curl -s "https://<ваш-backend>.onrender.com/api/sessions/teacher" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -39,9 +39,9 @@ curl -s "http://127.0.0.1:5001/api/sessions/teacher" \
 ## 3) GET `/api/sessions/{id}/live-qr`
 
 ```bash
-curl -s "http://127.0.0.1:5001/api/sessions/55/live-qr?port=5173" \
+curl -s "https://<ваш-backend>.onrender.com/api/sessions/55/live-qr?port=443" \
   -H "Authorization: Bearer $TOKEN" \
-  -H "X-Frontend-Origin: http://192.168.1.37:5173"
+  -H "X-Frontend-Origin: https://classqr-frontend.onrender.com"
 ```
 
 ```json
@@ -50,7 +50,7 @@ curl -s "http://127.0.0.1:5001/api/sessions/55/live-qr?port=5173" \
   "code": "AB12CD",
   "nonce": "nonce",
   "expires_in_seconds": 3,
-  "join_url": "http://192.168.1.37:5173/join?code=AB12CD&nonce=...",
+  "join_url": "https://classqr-frontend.onrender.com/join?code=AB12CD&nonce=...",
   "qr_code": "data:image/png;base64,..."
 }
 ```
@@ -58,7 +58,7 @@ curl -s "http://127.0.0.1:5001/api/sessions/55/live-qr?port=5173" \
 ## 4) POST `/api/sessions/verify-ticket`
 
 ```bash
-curl -s -X POST "http://127.0.0.1:5001/api/sessions/verify-ticket" \
+curl -s -X POST "https://<ваш-backend>.onrender.com/api/sessions/verify-ticket" \
   -H "Authorization: Bearer $STUDENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"code":"AB12CD","nonce":"...","device_id":"device-123"}'
@@ -76,7 +76,7 @@ curl -s -X POST "http://127.0.0.1:5001/api/sessions/verify-ticket" \
 ## 5) POST `/api/answers/submit`
 
 ```bash
-curl -s -X POST "http://127.0.0.1:5001/api/answers/submit" \
+curl -s -X POST "https://<ваш-backend>.onrender.com/api/answers/submit" \
   -H "Authorization: Bearer $STUDENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"session_code":"AB12CD","text":"Мой ответ","device_id":"device-123"}'
@@ -89,7 +89,7 @@ curl -s -X POST "http://127.0.0.1:5001/api/answers/submit" \
 ## 6) POST `/api/answers/{id}/grade`
 
 ```bash
-curl -s -X POST "http://127.0.0.1:5001/api/answers/9001/grade" \
+curl -s -X POST "https://<ваш-backend>.onrender.com/api/answers/9001/grade" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"score":4,"comment":"OK","is_correct":true}'
@@ -109,7 +109,7 @@ curl -s -X POST "http://127.0.0.1:5001/api/answers/9001/grade" \
 ## 7) GET `/api/rating/group`
 
 ```bash
-curl -s "http://127.0.0.1:5001/api/rating/group?group_id=3" \
+curl -s "https://<ваш-backend>.onrender.com/api/rating/group?group_id=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -122,7 +122,7 @@ curl -s "http://127.0.0.1:5001/api/rating/group?group_id=3" \
 ## 8) POST `/api/analytics/cluster/{group_id}`
 
 ```bash
-curl -s -X POST "http://127.0.0.1:5001/api/analytics/cluster/3" \
+curl -s -X POST "https://<ваш-backend>.onrender.com/api/analytics/cluster/3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -138,7 +138,7 @@ curl -s -X POST "http://127.0.0.1:5001/api/analytics/cluster/3" \
 ## 9) GET `/api/analytics/cluster/{group_id}/transitions`
 
 ```bash
-curl -s "http://127.0.0.1:5001/api/analytics/cluster/3/transitions" \
+curl -s "https://<ваш-backend>.onrender.com/api/analytics/cluster/3/transitions" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
