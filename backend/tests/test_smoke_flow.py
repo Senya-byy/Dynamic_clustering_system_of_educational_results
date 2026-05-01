@@ -36,7 +36,9 @@ def client(tmp_path):
             teacher.set_password("teacher123")
             student = User(login="student1", role="student", group_id=None, full_name="Student")
             student.set_password("student123")
-            _db.session.add_all([teacher, student])
+            student2 = User(login="student2", role="student", group_id=None, full_name="Student2")
+            student2.set_password("student123")
+            _db.session.add_all([teacher, student, student2])
             _db.session.commit()
 
             grp = Group(name="G1", teacher_id=teacher.id)
@@ -44,6 +46,7 @@ def client(tmp_path):
             _db.session.commit()
 
             student.group_id = grp.id
+            student2.group_id = grp.id
             _db.session.commit()
 
             topic = Topic(name="T1", teacher_id=teacher.id)
@@ -104,6 +107,7 @@ def test_smoke_qr_answer_grade_flow(client):
     assert qr.status_code == 200, qr.json
     assert qr.json["code"]
     assert qr.json["nonce"]
+    assert qr.json.get("expires_in_seconds") == 5
 
     code = qr.json["code"]
     nonce = qr.json["nonce"]
@@ -116,6 +120,15 @@ def test_smoke_qr_answer_grade_flow(client):
     )
     assert verified.status_code == 200, verified.json
     assert "question" in verified.json
+
+    # Повторный verify тем же nonce до ответа — тот же вопрос (устойчивость к обновлению страницы)
+    verified_again = client.post(
+        "/api/sessions/verify-ticket",
+        headers=_auth(student_token),
+        json={"code": code, "nonce": nonce, "device_id": "device-1"},
+    )
+    assert verified_again.status_code == 200, verified_again.json
+    assert verified_again.json["question_id"] == verified.json["question_id"]
 
     # Student submit answer
     submitted = client.post(
@@ -145,6 +158,30 @@ def test_smoke_qr_answer_grade_flow(client):
     answers2 = client.get(f"/api/sessions/{sid}/answers", headers=_auth(teacher_token))
     assert answers2.status_code == 200
     assert answers2.json[0]["checked_at"] is not None
+
+
+def test_two_students_same_qr_nonce(client):
+    """Один nonce в QR — несколько студентов группы могут получить вопрос, пока билет не истёк."""
+    teacher_token = _login(client, "teacher1", "teacher123")
+    student1_token = _login(client, "student1", "student123")
+    student2_token = _login(client, "student2", "student123")
+
+    _, code, nonce = _create_session_and_qr(client, teacher_token)
+
+    v1 = client.post(
+        "/api/sessions/verify-ticket",
+        headers=_auth(student1_token),
+        json={"code": code, "nonce": nonce, "device_id": "device-s1"},
+    )
+    assert v1.status_code == 200, v1.json
+
+    v2 = client.post(
+        "/api/sessions/verify-ticket",
+        headers=_auth(student2_token),
+        json={"code": code, "nonce": nonce, "device_id": "device-s2"},
+    )
+    assert v2.status_code == 200, v2.json
+    assert v2.json["question"]["text"] == v1.json["question"]["text"]
 
 
 def test_negative_submit_without_verify_requires_qr_first(client):

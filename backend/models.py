@@ -80,7 +80,7 @@ class Session(db.Model):
 
 
 class JoinTicket(db.Model):
-    """Одноразовый билет для входа по динамическому QR (MoSCoW)."""
+    """Краткоживущий билет по динамическому QR: один nonce до истечения срока — для любого студента группы."""
     __tablename__ = 'join_tickets'
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)

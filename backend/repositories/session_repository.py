@@ -127,7 +127,7 @@ class SessionRepository:
             db.session.commit()
 
     @staticmethod
-    def create_join_ticket(session_id: int, nonce: str, ttl_seconds: float = 3.0) -> JoinTicket:
+    def create_join_ticket(session_id: int, nonce: str, ttl_seconds: float = 5.0) -> JoinTicket:
         expires = datetime.utcnow() + timedelta(seconds=ttl_seconds)
         t = JoinTicket(session_id=session_id, nonce=nonce, expires_at=expires)
         db.session.add(t)

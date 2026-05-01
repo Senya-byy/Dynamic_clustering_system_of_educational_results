@@ -21,6 +21,9 @@ from typing import Dict, List, Optional
 import secrets
 from urllib.parse import quote
 
+# Билет по QR: несколько студентов могут пройти verify по одному nonce, пока не истёк срок.
+JOIN_TICKET_TTL_SECONDS = 5.0
+
 
 class SessionService:
     def __init__(self):
@@ -143,7 +146,7 @@ class SessionService:
 
         self.session_repo.purge_expired_tickets()
         nonce = secrets.token_urlsafe(24)
-        self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=3.5)
+        self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=JOIN_TICKET_TTL_SECONDS)
         base = base_url.rstrip('/')
         join_path = f"{base}/join?code={quote(sess.code)}&nonce={quote(nonce)}"
         qr_base64 = generate_qr_base64(join_path)
@@ -152,7 +155,7 @@ class SessionService:
             'session_id': sess.id,
             'code': sess.code,
             'nonce': nonce,
-            'expires_in_seconds': 3,
+            'expires_in_seconds': int(JOIN_TICKET_TTL_SECONDS),
             'join_url': join_path,
             'qr_code': qr_base64,
         }
@@ -185,7 +188,7 @@ class SessionService:
         self.ensure_device_binding(sess.id, device_key, student_id)
 
         qid = self.ensure_student_question_id(sess, student_id)
-        self.session_repo.consume_ticket(ticket, student_id)
+        # Билет не «сжигаем»: один и тот же nonce действует до expires_at для всех студентов группы.
         question = self.question_repo.find_by_id(qid)
         return {
             'id': sess.id,
