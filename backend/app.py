@@ -106,6 +106,20 @@ def _ensure_sqlite_migrations():
                 conn.execute(text('ALTER TABLE cluster_runs ADD COLUMN silhouette_score FLOAT'))
 
 
+def _ensure_sessions_join_pin_column():
+    """Добавляет join_pin для любого движка (SQLite/Postgres), если колонки ещё нет."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(db.engine)
+    if 'sessions' not in insp.get_table_names():
+        return
+    scols = {c['name'] for c in insp.get_columns('sessions')}
+    if 'join_pin' in scols:
+        return
+    with db.engine.begin() as conn:
+        conn.execute(text('ALTER TABLE sessions ADD COLUMN join_pin VARCHAR(12)'))
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -159,6 +173,7 @@ def create_app():
         if app_env != "test":
             db.create_all()
             _ensure_sqlite_migrations()
+            _ensure_sessions_join_pin_column()
             try:
                 seed_enabled_default = "false" if app_env == "production" else "true"
                 if os.environ.get("SEED_DATA", seed_enabled_default).lower() in ("1", "true", "yes"):
@@ -169,6 +184,7 @@ def create_app():
                     db.drop_all()
                     db.create_all()
                     _ensure_sqlite_migrations()
+                    _ensure_sessions_join_pin_column()
                     if os.environ.get("SEED_DATA", "true").lower() in ("1", "true", "yes"):
                         seed_data()
                 else:
@@ -189,6 +205,7 @@ def create_app():
         get_session_by_code,
         get_live_qr,
         verify_join_ticket,
+        verify_session_pin,
         list_teacher_sessions,
         close_session,
         patch_session_title,
@@ -270,6 +287,7 @@ def create_app():
 
     app.add_url_rule('/api/sessions/teacher', view_func=list_teacher_sessions, methods=['GET'])
     app.add_url_rule('/api/sessions/verify-ticket', view_func=verify_join_ticket, methods=['POST'])
+    app.add_url_rule('/api/sessions/verify-pin', view_func=verify_session_pin, methods=['POST'])
     app.add_url_rule('/api/sessions', view_func=create_session, methods=['POST'])
     app.add_url_rule(
         '/api/sessions/<int:sid>/live-qr',

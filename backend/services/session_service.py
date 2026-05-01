@@ -12,7 +12,9 @@ from repositories.answer_repository import AnswerRepository
 from repositories.user_repository import UserRepository
 from repositories.assignment_repository import AssignmentRepository
 from repositories.device_binding_repository import DeviceBindingRepository
-from models import db, Group, Topic, Question, SessionStudentAssignment
+import hmac
+
+from models import db, Group, Topic, Question, Session as SessionORM, SessionStudentAssignment
 from utils.device_key import normalize_device_key
 from utils.qr_generator import generate_qr_base64
 from utils.session_display import session_display_title
@@ -57,6 +59,12 @@ class SessionService:
         return random.choice(unused if unused else pool)
 
     def ensure_device_binding(self, session_id: int, device_key: str, student_id: int) -> None:
+        prior_student = DeviceBindingRepository.find_by_session_student(session_id, student_id)
+        if prior_student and prior_student.device_key != device_key:
+            raise ValueError(
+                'Вы уже заходили на эту пару с другого устройства. '
+                'Продолжайте с того же браузера или телефона.'
+            )
         row = DeviceBindingRepository.find(session_id, device_key)
         if row:
             if row.student_id != student_id:
@@ -130,6 +138,7 @@ class SessionService:
         return {
             'id': sess.id,
             'code': sess.code,
+            'join_pin': getattr(sess, 'join_pin', None) or '',
             'question_id': sess.question_id,
             'start_time': sess.start_time.isoformat(),
         }
@@ -138,6 +147,13 @@ class SessionService:
         sess = self.session_repo.find_by_id(session_id)
         if not sess or not sess.is_active:
             raise ValueError('Сессия не найдена или закрыта')
+        pin = getattr(sess, 'join_pin', None)
+        if not pin or not str(pin).strip():
+            row = SessionORM.query.get(session_id)
+            if row:
+                row.join_pin = SessionRepository._generate_join_pin()
+                db.session.commit()
+            sess = self.session_repo.find_by_id(session_id)
         group = Group.query.get(sess.group_id)
         u = self.user_repo.find_by_id(teacher_id)
         is_admin = u and u.role == 'admin'
@@ -154,10 +170,44 @@ class SessionService:
         return {
             'session_id': sess.id,
             'code': sess.code,
+            'join_pin': getattr(sess, 'join_pin', None) or '',
             'nonce': nonce,
             'expires_in_seconds': int(JOIN_TICKET_TTL_SECONDS),
             'join_url': join_path,
             'qr_code': qr_base64,
+        }
+
+    def _finalize_student_session_join(
+        self, sess, student_id: int, device_key: str
+    ) -> Dict:
+        user = self.user_repo.find_by_id(student_id)
+        if not user or user.role != 'student':
+            raise PermissionError('Только студент может входить на пару')
+        if user.group_id != sess.group_id:
+            raise PermissionError('Эта пара не для вашей группы')
+
+        existing = self.answer_repo.find_by_session_student(sess.id, student_id)
+        if existing:
+            raise ValueError(
+                'Вы уже отправили ответ на эту пару с этого аккаунта (в том числе с другого телефона). '
+                'Повторно получить вопрос нельзя.'
+            )
+
+        self.ensure_device_binding(sess.id, device_key, student_id)
+
+        qid = self.ensure_student_question_id(sess, student_id)
+        question = self.question_repo.find_by_id(qid)
+        return {
+            'id': sess.id,
+            'code': sess.code,
+            'question_id': qid,
+            'question': {
+                'text': question.text,
+                'topic': question.topic,
+                'difficulty': question.difficulty,
+                'max_score': question.max_score,
+            },
+            'timer_seconds': sess.timer_seconds,
         }
 
     def verify_join_ticket(
@@ -172,36 +222,30 @@ class SessionService:
         if not sess or sess.code != code or not sess.is_active:
             raise ValueError('Сессия не найдена')
 
-        user = self.user_repo.find_by_id(student_id)
-        if not user or user.role != 'student':
-            raise PermissionError('Только студент может входить по QR')
-        if user.group_id != sess.group_id:
-            raise PermissionError('Эта пара не для вашей группы')
+        return self._finalize_student_session_join(sess, student_id, device_key)
 
-        existing = self.answer_repo.find_by_session_student(sess.id, student_id)
-        if existing:
+    def verify_session_pin(
+        self, code: str, join_pin: str, student_id: int, device_key: str
+    ) -> Dict:
+        student_id = int(student_id)
+        device_key = normalize_device_key(device_key)
+        sess = self.session_repo.find_by_code(code.strip())
+        if not sess or not sess.is_active:
+            raise ValueError('Неверный код пары или пароль.')
+        expected = getattr(sess, 'join_pin', None)
+        if not expected or not str(expected).strip():
             raise ValueError(
-                'Вы уже отправили ответ на эту пару с этого аккаунта (в том числе с другого телефона). '
-                'Повторно получить вопрос нельзя.'
+                'Ручной вход пока недоступен. Пусть преподаватель откроет живой QR по этой паре.'
             )
-
-        self.ensure_device_binding(sess.id, device_key, student_id)
-
-        qid = self.ensure_student_question_id(sess, student_id)
-        # Билет не «сжигаем»: один и тот же nonce действует до expires_at для всех студентов группы.
-        question = self.question_repo.find_by_id(qid)
-        return {
-            'id': sess.id,
-            'code': sess.code,
-            'question_id': qid,
-            'question': {
-                'text': question.text,
-                'topic': question.topic,
-                'difficulty': question.difficulty,
-                'max_score': question.max_score,
-            },
-            'timer_seconds': sess.timer_seconds,
-        }
+        exp_s = str(expected).strip()
+        if not exp_s.isdigit():
+            raise ValueError('Неверный код пары или пароль.')
+        got_clean = ''.join(ch for ch in (join_pin or '') if ch.isdigit())
+        if len(got_clean) != len(exp_s):
+            raise ValueError('Неверный код пары или пароль.')
+        if not hmac.compare_digest(exp_s.encode('utf-8'), got_clean.encode('utf-8')):
+            raise ValueError('Неверный код пары или пароль.')
+        return self._finalize_student_session_join(sess, student_id, device_key)
 
     def get_session_by_code(self, code: str, role: str) -> Optional[Dict]:
         """Просмотр состава пары преподавателем (без одноразового билета)."""

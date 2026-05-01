@@ -166,7 +166,7 @@ def test_two_students_same_qr_nonce(client):
     student1_token = _login(client, "student1", "student123")
     student2_token = _login(client, "student2", "student123")
 
-    _, code, nonce = _create_session_and_qr(client, teacher_token)
+    _, code, nonce, _pin = _create_session_and_qr(client, teacher_token)
 
     v1 = client.post(
         "/api/sessions/verify-ticket",
@@ -182,6 +182,48 @@ def test_two_students_same_qr_nonce(client):
     )
     assert v2.status_code == 200, v2.json
     assert v2.json["question"]["text"] == v1.json["question"]["text"]
+
+
+def test_verify_pin_two_students(client):
+    teacher_token = _login(client, "teacher1", "teacher123")
+    s1 = _login(client, "student1", "student123")
+    s2 = _login(client, "student2", "student123")
+    _, code, _nonce, pin = _create_session_and_qr(client, teacher_token)
+    assert len(pin) == 6
+
+    a = client.post(
+        "/api/sessions/verify-pin",
+        headers=_auth(s1),
+        json={"code": code, "join_pin": pin, "device_id": "pin-dev-1"},
+    )
+    assert a.status_code == 200, a.json
+    b = client.post(
+        "/api/sessions/verify-pin",
+        headers=_auth(s2),
+        json={"code": code, "join_pin": pin, "device_id": "pin-dev-2"},
+    )
+    assert b.status_code == 200, b.json
+
+
+def test_verify_pin_same_student_second_device_fails(client):
+    teacher_token = _login(client, "teacher1", "teacher123")
+    st = _login(client, "student1", "student123")
+    _, code, _nonce, pin = _create_session_and_qr(client, teacher_token)
+
+    first = client.post(
+        "/api/sessions/verify-pin",
+        headers=_auth(st),
+        json={"code": code, "join_pin": pin, "device_id": "only-one"},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/api/sessions/verify-pin",
+        headers=_auth(st),
+        json={"code": code, "join_pin": pin, "device_id": "other-phone"},
+    )
+    assert second.status_code == 400
+    assert "другого устройства" in second.json.get("error", "")
 
 
 def test_negative_submit_without_verify_requires_qr_first(client):
@@ -218,14 +260,14 @@ def _create_session_and_qr(client, teacher_token: str):
         headers={**_auth(teacher_token), "X-Frontend-Origin": "http://127.0.0.1:5173"},
     )
     assert qr.status_code == 200, qr.json
-    return sid, qr.json["code"], qr.json["nonce"]
+    return sid, qr.json["code"], qr.json["nonce"], qr.json.get("join_pin") or ""
 
 
 def test_negative_double_submit_answer_forbidden(client):
     teacher_token = _login(client, "teacher1", "teacher123")
     student_token = _login(client, "student1", "student123")
 
-    _, code, nonce = _create_session_and_qr(client, teacher_token)
+    _, code, nonce, _pin = _create_session_and_qr(client, teacher_token)
 
     verified = client.post(
         "/api/sessions/verify-ticket",
@@ -254,7 +296,7 @@ def test_negative_verify_after_answer_forbidden(client):
     teacher_token = _login(client, "teacher1", "teacher123")
     student_token = _login(client, "student1", "student123")
 
-    _, code, nonce = _create_session_and_qr(client, teacher_token)
+    _, code, nonce, _pin = _create_session_and_qr(client, teacher_token)
 
     verified = client.post(
         "/api/sessions/verify-ticket",
@@ -271,7 +313,7 @@ def test_negative_verify_after_answer_forbidden(client):
     assert first.status_code == 201
 
     # new ticket after answer still should refuse to give question again
-    sid2, code2, nonce2 = _create_session_and_qr(client, teacher_token)
+    sid2, code2, nonce2, _p2 = _create_session_and_qr(client, teacher_token)
     assert code2  # different session, just to keep helper used
     # But verify-ticket should fail for original session only; we need a new ticket for original session:
     # Issue another ticket for the original session and attempt verify again.
@@ -286,7 +328,7 @@ def test_rbac_student_cannot_grade_or_create_session(client):
     teacher_token = _login(client, "teacher1", "teacher123")
     student_token = _login(client, "student1", "student123")
 
-    sid, code, nonce = _create_session_and_qr(client, teacher_token)
+    sid, code, nonce, _pin = _create_session_and_qr(client, teacher_token)
 
     verified = client.post(
         "/api/sessions/verify-ticket",

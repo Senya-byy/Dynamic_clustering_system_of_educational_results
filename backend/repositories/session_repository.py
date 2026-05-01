@@ -23,6 +23,11 @@ from typing import List, Optional
 
 class SessionRepository:
     @staticmethod
+    def _generate_join_pin() -> str:
+        """6 цифр: проще продиктовать с кафедры; не меняется на протяжении сессии."""
+        return f"{random.randint(0, 999_999):06d}"
+
+    @staticmethod
     def generate_unique_code(length=6) -> str:
         while True:
             code = ''.join(
@@ -41,10 +46,12 @@ class SessionRepository:
             qpool_json = json.dumps([int(x) for x in pool])
             data['question_id'] = random.choice([int(x) for x in pool])
         data['code'] = SessionRepository.generate_unique_code()
+        data['join_pin'] = SessionRepository._generate_join_pin()
         if qpool_json:
             data['question_pool_json'] = qpool_json
         allowed = {
             'code',
+            'join_pin',
             'group_id',
             'question_id',
             'created_by',

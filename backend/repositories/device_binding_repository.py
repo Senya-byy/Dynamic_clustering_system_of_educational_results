@@ -14,6 +14,14 @@ class DeviceBindingRepository:
         ).first()
 
     @staticmethod
+    def find_by_session_student(
+        session_id: int, student_id: int
+    ) -> Optional[SessionDeviceBinding]:
+        return SessionDeviceBinding.query.filter_by(
+            session_id=session_id, student_id=student_id
+        ).first()
+
+    @staticmethod
     def create(session_id: int, device_key: str, student_id: int) -> SessionDeviceBinding:
         row = SessionDeviceBinding(
             session_id=session_id,

@@ -59,8 +59,29 @@
     <div v-if="activeSessionId" class="ui-card qr-panel">
       <h3>Живой QR</h3>
       <img v-if="liveQr" :src="liveQr" alt="QR" class="qr-img" />
-      <p class="mono">Код: <strong>{{ sessionCode }}</strong></p>
-      <p class="page-lead" style="margin-bottom: 0.75rem">Студент входит по ссылке из QR (роль student).</p>
+      <p class="mono">Код пары: <strong>{{ sessionCode }}</strong></p>
+      <p class="page-lead" style="margin-bottom: 0.75rem">
+        Студент с ролью <code class="ui-badge">student</code> — по ссылке из QR или вручную (код + пароль ниже).
+      </p>
+      <button
+        type="button"
+        class="ui-btn ui-btn--ghost"
+        style="margin-bottom: 0.75rem"
+        @click="showManualCreds = !showManualCreds"
+      >
+        {{ showManualCreds ? 'Скрыть' : 'Показать' }} код и пароль для ручного входа
+      </button>
+      <div v-if="showManualCreds" class="manual-creds ui-card ui-card--muted" style="text-align: left; margin-bottom: 1rem">
+        <p class="mono" style="margin: 0 0 0.35rem">
+          Код: <strong>{{ sessionCode }}</strong>
+        </p>
+        <p class="mono" style="margin: 0">
+          Пароль (не меняется на всей паре): <strong>{{ joinPin || '—' }}</strong>
+        </p>
+        <p class="ui-meta" style="margin: 0.5rem 0 0; font-size: 0.82rem">
+          Диктуйте или показывайте отдельно от QR. С одного телефона нельзя войти под разными аккаунтами; с другого телефона тот же логин — нельзя, если уже зашли с первого.
+        </p>
+      </div>
       <button type="button" class="ui-btn ui-btn--secondary" @click="stopLive">Остановить обновление</button>
     </div>
 
@@ -155,6 +176,8 @@ const poolTopicIds = ref([])
 const timerSeconds = ref('')
 const liveQr = ref('')
 const sessionCode = ref('')
+const joinPin = ref('')
+const showManualCreds = ref(false)
 const activeSessionId = ref(null)
 const mySessions = ref([])
 const editingTitleId = ref(null)
@@ -222,6 +245,9 @@ const pollQr = async () => {
   })
   liveQr.value = res.data.qr_code
   sessionCode.value = res.data.code
+  if (res.data.join_pin) {
+    joinPin.value = res.data.join_pin
+  }
 }
 
 const startSession = async () => {
@@ -242,6 +268,7 @@ const startSession = async () => {
     const res = await api.post('/sessions', body)
     activeSessionId.value = res.data.id
     sessionCode.value = res.data.code
+    joinPin.value = res.data.join_pin || joinPin.value
     await fetchSessions()
     stopLive()
     pollTimer = setInterval(pollQr, 1000)
@@ -254,6 +281,8 @@ const startSession = async () => {
 const goLive = (s) => {
   activeSessionId.value = s.id
   sessionCode.value = s.code
+  joinPin.value = ''
+  showManualCreds.value = false
   stopLive()
   pollTimer = setInterval(pollQr, 1000)
   pollQr()
@@ -271,6 +300,8 @@ const closeSession = async (id) => {
   if (activeSessionId.value === id) {
     activeSessionId.value = null
     liveQr.value = ''
+    joinPin.value = ''
+    showManualCreds.value = false
     stopLive()
   }
   await fetchSessions()

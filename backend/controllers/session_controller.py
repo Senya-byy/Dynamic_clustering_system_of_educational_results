@@ -4,7 +4,7 @@ from utils.lan_hosts import resolve_public_frontend_base
 from services.session_service import SessionService
 from repositories.group_repository import GroupRepository
 from middleware.auth_middleware import token_required, role_required
-from utils.validation import require_json, get_int, get_str
+from utils.validation import require_json, get_int, get_str, get_trimmed_nonblank_str
 
 session_service = SessionService()
 group_repo = GroupRepository()
@@ -131,6 +131,28 @@ def verify_join_ticket(current_user):
         code,
         nonce,
         current_user["id"],
+        device_id,
+    )
+    return jsonify(payload), 200
+
+
+@token_required
+@role_required(['student'])
+def verify_session_pin(current_user):
+    data = require_json(request)
+    code = get_trimmed_nonblank_str(data, 'code', required=True, max_len=32)
+    join_pin = get_trimmed_nonblank_str(data, 'join_pin', required=True, max_len=12)
+    device_id = get_str(
+        data,
+        'device_id',
+        required=True,
+        min_len=1,
+        max_len=256,
+    )
+    payload = session_service.verify_session_pin(
+        code,
+        join_pin,
+        current_user['id'],
         device_id,
     )
     return jsonify(payload), 200

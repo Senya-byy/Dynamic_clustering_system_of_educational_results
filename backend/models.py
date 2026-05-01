@@ -77,6 +77,8 @@ class Session(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     timer_seconds = db.Column(db.Integer, nullable=True)
     question_pool_json = db.Column(db.Text, nullable=True)  # JSON list id вопросов
+    # Статический PIN для ручного входа (без QR); выдаётся только преподавателю в live-qr.
+    join_pin = db.Column(db.String(12), nullable=True)
 
 
 class JoinTicket(db.Model):

@@ -2,20 +2,61 @@
   <div class="page-narrow">
     <h2>Ответ на паре</h2>
     <p class="page-lead">
-      Код и nonce с экрана преподавателя (QR обновляется каждую секунду, один и тот же QR действует несколько секунд). Вам назначается свой вопрос;
-      после отправки ответа эту пару по QR пройти снова нельзя.
+      Вход по ссылке из QR (nonce живёт несколько секунд) или вручную по коду пары и паролю с экрана преподавателя. Вам назначается свой вопрос; после ответа повторно войти нельзя.
     </p>
 
     <div v-if="!sessionInfo" class="ui-card">
-      <label class="ui-label" for="code">Код сессии</label>
-      <input id="code" v-model="sessionCode" class="ui-input" placeholder="Например AB12CD" />
-
-      <label class="ui-label" for="nonce">Nonce</label>
-      <input id="nonce" v-model="nonce" class="ui-input" placeholder="Из ссылки после сканирования QR" />
-
-      <div class="ui-actions">
-        <button type="button" class="ui-btn ui-btn--primary" @click="verifyTicket">Получить вопрос</button>
+      <div class="join-mode-row">
+        <button
+          type="button"
+          class="ui-btn"
+          :class="joinMode === 'qr' ? 'ui-btn--primary' : 'ui-btn--ghost'"
+          @click="joinMode = 'qr'"
+        >
+          Из QR
+        </button>
+        <button
+          type="button"
+          class="ui-btn"
+          :class="joinMode === 'manual' ? 'ui-btn--primary' : 'ui-btn--ghost'"
+          @click="joinMode = 'manual'"
+        >
+          Код и пароль
+        </button>
       </div>
+
+      <template v-if="joinMode === 'qr'">
+        <label class="ui-label" for="code">Код пары</label>
+        <input id="code" v-model="sessionCode" class="ui-input" placeholder="Например AB12CD" />
+
+        <label class="ui-label" for="nonce">Nonce</label>
+        <input id="nonce" v-model="nonce" class="ui-input" placeholder="Из ссылки после сканирования QR" />
+
+        <div class="ui-actions">
+          <button type="button" class="ui-btn ui-btn--primary" @click="verifyTicket">Получить вопрос</button>
+        </div>
+      </template>
+
+      <template v-else>
+        <label class="ui-label" for="mcode">Код пары</label>
+        <input id="mcode" v-model="manualCode" class="ui-input" placeholder="Как у преподавателя" />
+
+        <label class="ui-label" for="mpin">Пароль пары (6 цифр)</label>
+        <input
+          id="mpin"
+          v-model="manualPin"
+          class="ui-input"
+          inputmode="numeric"
+          maxlength="12"
+          placeholder="000000"
+          autocomplete="one-time-code"
+        />
+
+        <div class="ui-actions">
+          <button type="button" class="ui-btn ui-btn--primary" @click="verifyManual">Получить вопрос</button>
+        </div>
+      </template>
+
       <p v-if="verifyError" class="ui-alert ui-alert--error">{{ verifyError }}</p>
     </div>
 
@@ -48,8 +89,11 @@ import api from '../api'
 import { getDeviceId } from '../utils/deviceId'
 import { useRouter, useRoute } from 'vue-router'
 
+const joinMode = ref('qr')
 const sessionCode = ref('')
 const nonce = ref('')
+const manualCode = ref('')
+const manualPin = ref('')
 const sessionInfo = ref(null)
 const answerText = ref('')
 const answerSubmitted = ref(false)
@@ -97,7 +141,7 @@ const verifyTicket = async () => {
   const code = sessionCode.value.trim()
   const n = nonce.value.trim()
   if (!code || !n) {
-    verifyError.value = 'Введите код сессии и nonce из ссылки'
+    verifyError.value = 'Введите код пары и nonce из ссылки'
     return
   }
   try {
@@ -106,11 +150,40 @@ const verifyTicket = async () => {
       nonce: n,
       device_id: getDeviceId()
     })
-    sessionInfo.value = res.data
-    if (res.data.timer_seconds) {
-      timerSeconds.value = res.data.timer_seconds
-      startTimer()
-    }
+    applySessionPayload(res.data)
+  } catch (e) {
+    verifyError.value = e.response?.data?.error || 'Ошибка'
+  }
+}
+
+const applySessionPayload = (data) => {
+  sessionInfo.value = data
+  sessionCode.value = data.code
+  if (data.timer_seconds) {
+    timerSeconds.value = data.timer_seconds
+    startTimer()
+  }
+}
+
+const verifyManual = async () => {
+  verifyError.value = ''
+  const code = manualCode.value.trim()
+  const pin = manualPin.value.trim().replace(/\D/g, '')
+  if (!code) {
+    verifyError.value = 'Введите код пары'
+    return
+  }
+  if (pin.length !== 6) {
+    verifyError.value = 'Пароль — ровно 6 цифр'
+    return
+  }
+  try {
+    const res = await api.post('/sessions/verify-pin', {
+      code,
+      join_pin: pin,
+      device_id: getDeviceId()
+    })
+    applySessionPayload(res.data)
   } catch (e) {
     verifyError.value = e.response?.data?.error || 'Ошибка'
   }
@@ -158,3 +231,12 @@ onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
 })
 </script>
+
+<style scoped>
+.join-mode-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+</style>
