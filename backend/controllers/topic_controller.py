@@ -3,6 +3,7 @@ from flask import request, jsonify
 from models import db, Question
 from repositories.topic_repository import TopicRepository
 from middleware.auth_middleware import token_required, role_required
+from utils.validation import require_json, get_str
 
 topic_repo = TopicRepository()
 
@@ -17,10 +18,8 @@ def list_topics(current_user):
 @token_required
 @role_required(['teacher', 'admin'])
 def create_topic(current_user):
-    data = request.get_json() or {}
-    name = (data.get('name') or '').strip()
-    if not name:
-        return jsonify({'error': 'name required'}), 400
+    data = require_json(request)
+    name = get_str(data, "name", required=True, min_len=1, max_len=200)
     t = topic_repo.create(name, current_user['id'])
     return jsonify({'id': t.id, 'name': t.name}), 201
 

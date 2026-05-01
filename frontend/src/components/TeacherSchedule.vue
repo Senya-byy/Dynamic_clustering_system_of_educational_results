@@ -78,15 +78,46 @@ const loadCurrent = async () => {
   }
 }
 
+const timeRe = /^\s*(\d{1,2}):(\d{2})\s*$/
+
 const addSlot = async () => {
-  await api.post('/schedule', {
-    group_id: Number(groupId.value),
-    weekday: form.value.weekday,
-    start_time: form.value.start_time,
-    end_time: form.value.end_time,
-    title: form.value.title || null
-  })
-  await load()
+  const st = (form.value.start_time || '').trim()
+  const et = (form.value.end_time || '').trim()
+  const m1 = st.match(timeRe)
+  const m2 = et.match(timeRe)
+  if (!m1 || !m2) {
+    alert('Время начала и конца укажите в формате ЧЧ:ММ (например 09:00)')
+    return
+  }
+  const toNorm = (m) => {
+    const h = parseInt(m[1], 10)
+    const mi = parseInt(m[2], 10)
+    if (h < 0 || h > 23 || mi < 0 || mi > 59) return null
+    return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`
+  }
+  const ns = toNorm(m1)
+  const ne = toNorm(m2)
+  if (!ns || !ne) {
+    alert('Некорректное время')
+    return
+  }
+  if (ns >= ne) {
+    alert('Время окончания должно быть позже начала')
+    return
+  }
+  const titleRaw = (form.value.title || '').trim()
+  try {
+    await api.post('/schedule', {
+      group_id: Number(groupId.value),
+      weekday: form.value.weekday,
+      start_time: ns,
+      end_time: ne,
+      title: titleRaw || null
+    })
+    await load()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось добавить слот')
+  }
 }
 
 const remove = async (id) => {

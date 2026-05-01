@@ -186,8 +186,9 @@ const cancelEditTitle = () => {
 }
 
 const saveSessionTitle = async (s) => {
+  const t = titleDraft.value.trim()
   try {
-    const res = await api.patch(`/sessions/${s.id}/title`, { title: titleDraft.value.trim() })
+    const res = await api.patch(`/sessions/${s.id}/title`, { title: t || null })
     s.display_title = res.data.display_title
     s.title = res.data.title
     cancelEditTitle()
@@ -237,13 +238,17 @@ const startSession = async () => {
     alert('Выберите один вопрос или одну/несколько тем для пула')
     return
   }
-  const res = await api.post('/sessions', body)
-  activeSessionId.value = res.data.id
-  sessionCode.value = res.data.code
-  await fetchSessions()
-  stopLive()
-  pollTimer = setInterval(pollQr, 1000)
-  await pollQr()
+  try {
+    const res = await api.post('/sessions', body)
+    activeSessionId.value = res.data.id
+    sessionCode.value = res.data.code
+    await fetchSessions()
+    stopLive()
+    pollTimer = setInterval(pollQr, 1000)
+    await pollQr()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось создать сессию')
+  }
 }
 
 const goLive = (s) => {

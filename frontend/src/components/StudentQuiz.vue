@@ -31,6 +31,7 @@
       <div class="ui-actions">
         <button type="button" class="ui-btn ui-btn--primary" @click="submitAnswer">Отправить</button>
       </div>
+      <p v-if="submitError" class="ui-alert ui-alert--error">{{ submitError }}</p>
       <div v-if="sessionInfo.timer_seconds" class="ui-timer">Таймер пары: {{ timerDisplay }}</div>
     </div>
 
@@ -53,6 +54,7 @@ const sessionInfo = ref(null)
 const answerText = ref('')
 const answerSubmitted = ref(false)
 const verifyError = ref('')
+const submitError = ref('')
 const timerSeconds = ref(0)
 let timerInterval = null
 const router = useRouter()
@@ -92,10 +94,16 @@ watch(
 
 const verifyTicket = async () => {
   verifyError.value = ''
+  const code = sessionCode.value.trim()
+  const n = nonce.value.trim()
+  if (!code || !n) {
+    verifyError.value = 'Введите код сессии и nonce из ссылки'
+    return
+  }
   try {
     const res = await api.post('/sessions/verify-ticket', {
-      code: sessionCode.value.trim(),
-      nonce: nonce.value.trim(),
+      code,
+      nonce: n,
       device_id: getDeviceId()
     })
     sessionInfo.value = res.data
@@ -116,13 +124,23 @@ const startTimer = () => {
 }
 
 const submitAnswer = async () => {
-  await api.post('/answers/submit', {
-    session_code: sessionCode.value.trim(),
-    text: answerText.value,
-    device_id: getDeviceId()
-  })
-  answerSubmitted.value = true
-  if (timerInterval) clearInterval(timerInterval)
+  const text = answerText.value.trim()
+  if (!text) {
+    submitError.value = 'Введите текст ответа'
+    return
+  }
+  submitError.value = ''
+  try {
+    await api.post('/answers/submit', {
+      session_code: sessionCode.value.trim(),
+      text,
+      device_id: getDeviceId()
+    })
+    answerSubmitted.value = true
+    if (timerInterval) clearInterval(timerInterval)
+  } catch (e) {
+    submitError.value = e.response?.data?.error || 'Не удалось отправить ответ'
+  }
 }
 
 const goAnswers = () => {

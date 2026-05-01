@@ -37,6 +37,8 @@ def post_schedule(current_user):
         return jsonify(row), 201
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except KeyError as e:
         return jsonify({'error': f'missing field {e}'}), 400
 

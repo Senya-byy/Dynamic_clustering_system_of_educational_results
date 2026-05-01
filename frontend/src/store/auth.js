@@ -12,7 +12,11 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async login(login, password) {
       try {
-        const res = await api.post('/auth/login', { login, password })
+        const lo = String(login || '').trim()
+        if (!lo || !password) {
+          return false
+        }
+        const res = await api.post('/auth/login', { login: lo, password })
         this.token = res.data.access_token
         this.role = res.data.role
         this.userId = String(res.data.user_id)

@@ -73,6 +73,13 @@ class AnswerService:
         checker_id: int,
         is_correct: Optional[bool] = None,
     ) -> Dict:
+        ans_row = self.answer_repo.find_by_id(answer_id)
+        if not ans_row:
+            raise ValueError("Ответ не найден")
+        q = Question.query.get(ans_row.question_id)
+        max_s = q.max_score if q else 0
+        if score < 0 or score > max_s:
+            raise ValueError(f"Баллы должны быть от 0 до {max_s}")
         ans = self.answer_repo.update_score(
             answer_id, score, comment, checker_id, is_correct=is_correct
         )

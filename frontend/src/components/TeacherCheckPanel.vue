@@ -107,16 +107,31 @@ const visibleAnswers = computed(() => {
 })
 
 const gradeAnswer = async (ans) => {
-  const res = await api.post(`/answers/${ans.id}/grade`, {
-    score: ans.score,
-    comment: ans.comment || '',
-    is_correct: ans.is_correct
-  })
-
-  // UX: сразу убираем из "Непроверено" в "Проверено" без перезагрузки списка
-  ans._justReviewed = true
-  if (res?.data?.checked_at) {
-    ans.checked_at = res.data.checked_at
+  const mx = Number(ans.max_score ?? ans.question_max_score ?? 0)
+  let sc = Number(ans.score)
+  if (!Number.isFinite(sc)) {
+    alert('Укажите баллы числом')
+    return
+  }
+  sc = Math.round(sc)
+  if (sc < 0 || sc > mx) {
+    alert(`Баллы должны быть от 0 до ${mx}`)
+    return
+  }
+  try {
+    const res = await api.post(`/answers/${ans.id}/grade`, {
+      score: sc,
+      comment: (ans.comment || '').trim(),
+      is_correct: ans.is_correct
+    })
+    ans.score = sc
+    // UX: сразу убираем из "Непроверено" в "Проверено" без перезагрузки списка
+    ans._justReviewed = true
+    if (res?.data?.checked_at) {
+      ans.checked_at = res.data.checked_at
+    }
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось сохранить оценку')
   }
 }
 

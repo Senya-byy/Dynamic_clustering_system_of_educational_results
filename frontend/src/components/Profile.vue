@@ -49,21 +49,42 @@ const fetchProfile = async () => {
 }
 
 const saveProfile = async () => {
-  await api.put('/auth/profile', {
-    full_name: profile.value.full_name,
-    privacy_mode: profile.value.privacy_mode
-  })
-  await authStore.fetchProfile()
-  alert('Профиль обновлён')
+  const fn = (profile.value.full_name || '').trim()
+  if (fn.length > 200) {
+    alert('ФИО не длиннее 200 символов')
+    return
+  }
+  try {
+    await api.put('/auth/profile', {
+      full_name: fn || null,
+      privacy_mode: profile.value.privacy_mode
+    })
+    profile.value.full_name = fn || null
+    await authStore.fetchProfile()
+    alert('Профиль обновлён')
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось сохранить')
+  }
 }
 
 const changePassword = async () => {
   pwdMsg.value = ''
   pwdErr.value = false
+  const nw = pwd.value.new
+  if (!pwd.value.old || !nw || !String(nw).trim()) {
+    pwdErr.value = true
+    pwdMsg.value = 'Заполните оба поля пароля'
+    return
+  }
+  if (String(nw).length < 4) {
+    pwdErr.value = true
+    pwdMsg.value = 'Новый пароль не короче 4 символов'
+    return
+  }
   try {
     await api.put('/auth/password', {
       old_password: pwd.value.old,
-      new_password: pwd.value.new
+      new_password: nw
     })
     pwdMsg.value = 'Пароль обновлён'
     pwd.value = { old: '', new: '' }

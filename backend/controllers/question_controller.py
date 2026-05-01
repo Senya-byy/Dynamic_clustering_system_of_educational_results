@@ -1,25 +1,58 @@
 # backend/controllers/question_controller.py
 from flask import request, jsonify
+from models import Topic
 from services.question_service import QuestionService
 from middleware.auth_middleware import token_required, role_required
-from utils.validation import require_json, get_str, get_int
+from utils.validation import require_json, get_str, get_int, get_trimmed_nonblank_str
 
 question_service = QuestionService()
+
+_ALLOWED_DIFFICULTY = frozenset({"easy", "medium", "hard"})
+
+
+def _assert_topic_access(topic_id: int, current_user: dict) -> None:
+    t = Topic.query.get(topic_id)
+    if not t:
+        raise ValueError("Тема из каталога не найдена")
+    if current_user["role"] != "admin" and t.teacher_id != current_user["id"]:
+        raise ValueError("Тема не из вашего каталога")
 
 
 @token_required
 @role_required(['teacher', 'admin'])
 def create_question(current_user):
     data = require_json(request)
-    # Validate, but keep payload keys for service/repo.
-    get_str(data, "text", required=True, min_len=1, max_len=20_000, strip=False)
+    data["text"] = get_trimmed_nonblank_str(
+        data, "text", required=True, max_len=20_000
+    )
+    data["correct_answer"] = get_trimmed_nonblank_str(
+        data, "correct_answer", required=True, max_len=20_000
+    )
     get_int(data, "max_score", required=True, min_value=1, max_value=10_000)
-    if "difficulty" in data:
-        get_str(data, "difficulty", required=False, max_len=50)
-    if "topic" in data:
-        get_str(data, "topic", required=False, max_len=200)
-    if "correct_answer" in data:
-        get_str(data, "correct_answer", required=False, max_len=20_000, strip=False)
+
+    raw_diff = data.get("difficulty")
+    if raw_diff is None or raw_diff == "":
+        data["difficulty"] = "medium"
+    else:
+        d = str(raw_diff).strip().lower()
+        if d not in _ALLOWED_DIFFICULTY:
+            raise ValueError("Сложность: easy, medium или hard")
+        data["difficulty"] = d
+
+    topic_id = get_int(data, "topic_id", required=False, min_value=1)
+    topic_free = get_str(data, "topic", required=False, max_len=100)
+    if topic_id:
+        _assert_topic_access(topic_id, current_user)
+        data["topic_id"] = topic_id
+    else:
+        data.pop("topic_id", None)
+    if topic_free:
+        data["topic"] = topic_free
+    else:
+        data.pop("topic", None)
+
+    if not topic_id and not topic_free:
+        raise ValueError("Укажите тему из каталога или краткое название темы (поле «Тема (текст)»)")
 
     data["created_by"] = current_user["id"]
     q = question_service.create_question(data)
@@ -65,15 +98,35 @@ def update_question(current_user, qid):
             return jsonify({'error': 'forbidden'}), 403
     # Validate fields if present (partial update).
     if "text" in data:
-        get_str(data, "text", required=True, min_len=1, max_len=20_000, strip=False)
+        data["text"] = get_trimmed_nonblank_str(
+            data, "text", required=True, max_len=20_000
+        )
     if "max_score" in data:
         get_int(data, "max_score", required=True, min_value=1, max_value=10_000)
     if "difficulty" in data:
-        get_str(data, "difficulty", required=False, max_len=50)
+        raw_diff = data.get("difficulty")
+        if raw_diff is None or raw_diff == "":
+            data["difficulty"] = None
+        else:
+            d = str(raw_diff).strip().lower()
+            if d not in _ALLOWED_DIFFICULTY:
+                raise ValueError("Сложность: easy, medium или hard")
+            data["difficulty"] = d
     if "topic" in data:
-        get_str(data, "topic", required=False, max_len=200)
+        topic_free = get_str(data, "topic", required=False, max_len=100)
+        data["topic"] = topic_free if topic_free else None
+    if "topic_id" in data:
+        tid = data.get("topic_id")
+        if tid is None or tid == "":
+            data["topic_id"] = None
+        else:
+            topic_id = int(tid)
+            _assert_topic_access(topic_id, current_user)
+            data["topic_id"] = topic_id
     if "correct_answer" in data:
-        get_str(data, "correct_answer", required=False, max_len=20_000, strip=False)
+        data["correct_answer"] = get_trimmed_nonblank_str(
+            data, "correct_answer", required=True, max_len=20_000
+        )
     q = question_service.update_question(int(qid), data or {})
     return jsonify(q), 200
 

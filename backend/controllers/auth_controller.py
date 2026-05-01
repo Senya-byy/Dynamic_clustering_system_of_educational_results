@@ -37,7 +37,10 @@ def get_profile(current_user):
 @token_required
 def update_profile(current_user):
     data = request.get_json()
-    profile = profile_service.update_profile(current_user['id'], data)
+    try:
+        profile = profile_service.update_profile(current_user['id'], data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     return jsonify(profile), 200
 
 
@@ -45,10 +48,15 @@ def update_profile(current_user):
 @token_required
 def change_password(current_user):
     data = request.get_json() or {}
-    if not data.get('old_password') or not data.get('new_password'):
+    old_p = data.get('old_password')
+    new_p = data.get('new_password')
+    if old_p is None or new_p is None or str(old_p).strip() == '' or str(new_p).strip() == '':
         return jsonify({'error': 'old_password и new_password обязательны'}), 400
+    new_p = str(new_p)
+    if len(new_p) < 4:
+        return jsonify({'error': 'Новый пароль не короче 4 символов'}), 400
     ok = auth_service.change_password(
-        current_user['id'], data['old_password'], data['new_password']
+        current_user['id'], str(old_p), new_p
     )
     if not ok:
         return jsonify({'error': 'Неверный текущий пароль'}), 400

@@ -235,9 +235,18 @@ const deleteUser = async (u) => {
 
 const createGroup = async () => {
   msg.group = null
+  const name = newGroup.value.name.trim()
+  if (!name) {
+    msg.group = { ok: false, text: 'Укажите название группы' }
+    return
+  }
+  if (!newGroup.value.teacher_id) {
+    msg.group = { ok: false, text: 'Выберите преподавателя' }
+    return
+  }
   try {
     await api.post('/admin/groups', {
-      name: newGroup.value.name,
+      name,
       teacher_id: newGroup.value.teacher_id
     })
     newGroup.value.name = ''
@@ -251,12 +260,23 @@ const createGroup = async () => {
 
 const createTeacher = async () => {
   msg.teacher = null
+  const login = newTeacher.value.login.trim()
+  const password = newTeacher.value.password
+  const fn = newTeacher.value.full_name.trim()
+  if (!login || !password) {
+    msg.teacher = { ok: false, text: 'Логин и пароль обязательны' }
+    return
+  }
+  if (password.length < 4) {
+    msg.teacher = { ok: false, text: 'Пароль не короче 4 символов' }
+    return
+  }
   try {
     await api.post('/admin/users', {
-      login: newTeacher.value.login,
-      password: newTeacher.value.password,
+      login,
+      password,
       role: 'teacher',
-      full_name: newTeacher.value.full_name || null
+      full_name: fn || null
     })
     newTeacher.value = { login: '', password: '', full_name: '' }
     msg.teacher = { ok: true, text: 'Преподаватель создан' }
@@ -269,12 +289,23 @@ const createTeacher = async () => {
 
 const createStudent = async () => {
   msg.student = null
+  const login = newStudent.value.login.trim()
+  const password = newStudent.value.password
+  const fn = newStudent.value.full_name.trim()
+  if (!login || !password) {
+    msg.student = { ok: false, text: 'Логин и пароль обязательны' }
+    return
+  }
+  if (password.length < 4) {
+    msg.student = { ok: false, text: 'Пароль не короче 4 символов' }
+    return
+  }
   try {
     const body = {
-      login: newStudent.value.login,
-      password: newStudent.value.password,
+      login,
+      password,
       role: 'student',
-      full_name: newStudent.value.full_name || null,
+      full_name: fn || null,
       group_id: newStudent.value.group_id
     }
     await api.post('/admin/users', body)

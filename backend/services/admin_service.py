@@ -73,6 +73,8 @@ class AdminService:
         login = (login or '').strip()
         if not login or not password:
             raise ValueError('Логин и пароль обязательны')
+        if len(str(password)) < 4:
+            raise ValueError('Пароль не короче 4 символов')
         if role not in ('student', 'teacher'):
             raise ValueError('Можно создать только роли student или teacher')
         if self.users.find_by_login(login):
@@ -100,6 +102,8 @@ class AdminService:
         login = (login or "").strip()
         if not login or not password:
             raise ValueError("Логин и пароль обязательны")
+        if len(str(password)) < 4:
+            raise ValueError("Пароль не короче 4 символов")
         if self.users.find_by_login(login):
             raise ValueError("Пользователь с таким логином уже есть")
         # Allow bootstrap only if there is no admin yet.

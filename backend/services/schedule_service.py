@@ -1,6 +1,20 @@
 # backend/services/schedule_service.py
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
+
+_HHMM_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
+
+
+def _parse_hhmm(raw, label: str) -> str:
+    s = "" if raw is None else str(raw)
+    m = _HHMM_RE.match(s)
+    if not m:
+        raise ValueError(f"{label}: укажите время как ЧЧ:ММ (например 09:00)")
+    h, mi = int(m.group(1)), int(m.group(2))
+    if h < 0 or h > 23 or mi < 0 or mi > 59:
+        raise ValueError(f"{label}: некорректное время")
+    return f"{h:02d}:{mi:02d}"
 from repositories.schedule_repository import ScheduleRepository
 from repositories.group_repository import GroupRepository
 from repositories.user_repository import UserRepository
@@ -33,16 +47,37 @@ class ScheduleService:
 
     def create_slot(self, data: dict, user_id: int, role: str) -> dict:
         group_id = data.get('group_id')
+        if group_id is None or group_id == "":
+            raise ValueError("Укажите group_id")
+        try:
+            group_id = int(group_id)
+        except (TypeError, ValueError):
+            raise ValueError("group_id должен быть числом")
         if not self._can_access_group(group_id, user_id, role) or role == 'student':
             raise PermissionError('Только преподаватель может менять расписание')
         g = self.group_repo.find_by_id(group_id)
+        if not g:
+            raise ValueError("Группа не найдена")
+        if 'weekday' not in data:
+            raise ValueError("Укажите день недели (0 — понедельник … 6 — воскресенье)")
+        wd = int(data['weekday'])
+        if wd < 0 or wd > 6:
+            raise ValueError("День недели должен быть от 0 до 6")
+        start_t = _parse_hhmm(data.get('start_time'), "Начало")
+        end_t = _parse_hhmm(data.get('end_time'), 'Конец')
+        if start_t >= end_t:
+            raise ValueError("Время окончания должно быть позже начала")
+        raw_title = data.get('title')
+        title = None
+        if raw_title is not None and str(raw_title).strip():
+            title = str(raw_title).strip()[:200]
         row = self.repo.create({
             'group_id': group_id,
             'teacher_id': g.teacher_id,
-            'weekday': int(data['weekday']),
-            'start_time': data['start_time'],
-            'end_time': data['end_time'],
-            'title': data.get('title'),
+            'weekday': wd,
+            'start_time': start_t,
+            'end_time': end_t,
+            'title': title,
         })
         return self._serialize(row)
 

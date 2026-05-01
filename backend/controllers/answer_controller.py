@@ -2,7 +2,7 @@
 from flask import request, jsonify
 from services.answer_service import AnswerService
 from middleware.auth_middleware import token_required, role_required
-from utils.validation import require_json, get_str, get_int, get_bool
+from utils.validation import require_json, get_str, get_int, get_bool, get_trimmed_nonblank_str
 
 answer_service = AnswerService()
 
@@ -19,7 +19,7 @@ def my_answers(current_user):
 def submit_answer(current_user):
     data = require_json(request)
     session_code = get_str(data, "session_code", required=True, min_len=1, max_len=32)
-    text = get_str(data, "text", required=True, min_len=1, max_len=10000, strip=False)
+    text = get_trimmed_nonblank_str(data, "text", required=True, max_len=10000)
     device_id = get_str(
         data,
         "device_id",

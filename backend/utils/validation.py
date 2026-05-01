@@ -62,6 +62,32 @@ def get_int(
     return v
 
 
+def get_trimmed_nonblank_str(
+    payload: Mapping[str, Any],
+    key: str,
+    *,
+    required: bool = True,
+    max_len: int | None = None,
+) -> str | None:
+    """
+    Текст для хранения: обрезает пробелы по краям, запрещает пустое значение
+    и строки из одних пробелов (в отличие от get_str(..., strip=False)).
+    """
+    raw = payload.get(key)
+    if raw is None:
+        if required:
+            raise ValueError(f"{key} обязателен")
+        return None
+    s = str(raw).strip()
+    if required and not s:
+        raise ValueError(f"{key} не может быть пустым или состоять только из пробелов")
+    if not required and not s:
+        return None
+    if max_len is not None and len(s) > max_len:
+        raise ValueError(f"{key} слишком длинный")
+    return s
+
+
 def get_bool(payload: Mapping[str, Any], key: str) -> bool | None:
     raw = payload.get(key)
     if raw is None:

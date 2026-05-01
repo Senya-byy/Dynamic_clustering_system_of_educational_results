@@ -154,9 +154,17 @@ def close_session(current_user, sid):
 @token_required
 @role_required(['teacher', 'admin'])
 def patch_session_title(current_user, sid):
-    data = request.get_json() or {}
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидается JSON-объект'}), 400
+    if 'title' not in data:
+        return jsonify({'error': 'Передайте поле title (строка, пустая строка или null — сброс к названию по умолчанию)'}), 400
     raw = data.get('title')
-    title = None if raw is None else str(raw)
+    if raw is None:
+        title = None
+    else:
+        s = str(raw).strip()
+        title = None if not s else s[:250]
     try:
         out = session_service.rename_session_title(int(sid), current_user['id'], title)
     except PermissionError as e:

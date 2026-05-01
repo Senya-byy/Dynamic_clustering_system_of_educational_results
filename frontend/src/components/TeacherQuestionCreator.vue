@@ -24,22 +24,31 @@
       <label class="ui-label">Формулировка</label>
       <textarea v-model="newQuestion.text" class="ui-textarea" rows="3" required placeholder="Текст вопроса" />
       <label class="ui-label">Тема (текст)</label>
-      <input v-model="newQuestion.topic" class="ui-input" placeholder="Кратко" />
+      <input v-model="newQuestion.topic" class="ui-input" placeholder="Кратко (если не выбрана тема из каталога)" />
       <label class="ui-label">Тема из каталога</label>
       <select v-model.number="newQuestion.topic_id" class="ui-select">
         <option :value="null">—</option>
         <option v-for="t in topics" :key="'sel' + t.id" :value="t.id">{{ t.name }}</option>
       </select>
+      <p class="page-lead" style="margin: 0 0 0.75rem; font-size: 0.85rem">
+        Нужно указать <strong>либо</strong> тему из каталога, <strong>либо</strong> краткий текст темы (можно оба).
+      </p>
       <label class="ui-label">Сложность</label>
       <select v-model="newQuestion.difficulty" class="ui-select">
         <option value="easy">Лёгкий</option>
         <option value="medium">Средний</option>
         <option value="hard">Сложный</option>
       </select>
-      <label class="ui-label">Макс. баллов (0 допустимо)</label>
-      <input v-model="newQuestion.max_score" class="ui-input" type="number" required />
+      <label class="ui-label">Макс. баллов</label>
+      <input v-model="newQuestion.max_score" class="ui-input" type="number" min="1" max="10000" required />
       <label class="ui-label">Эталон / критерии</label>
-      <textarea v-model="newQuestion.correct_answer" class="ui-textarea" rows="4" placeholder="Как оценивать ответ" />
+      <textarea
+        v-model="newQuestion.correct_answer"
+        class="ui-textarea"
+        rows="4"
+        required
+        placeholder="Как оценивать ответ"
+      />
       <div class="ui-actions">
         <button type="button" class="ui-btn ui-btn--ghost" @click="loadRecommendations">Подсказки</button>
         <button type="submit" class="ui-btn ui-btn--primary">Создать вопрос</button>
@@ -66,13 +75,13 @@
       <div class="ui-modal" @click.stop>
         <h3>Редактирование</h3>
         <label class="ui-label">Текст</label>
-        <textarea v-model="editForm.text" class="ui-textarea" rows="3" />
+        <textarea v-model="editForm.text" class="ui-textarea" rows="3" required />
         <label class="ui-label">Тема</label>
         <input v-model="editForm.topic" class="ui-input" />
         <label class="ui-label">Баллы</label>
-        <input v-model="editForm.max_score" class="ui-input" type="number" />
+        <input v-model="editForm.max_score" class="ui-input" type="number" min="1" max="10000" />
         <label class="ui-label">Эталон</label>
-        <textarea v-model="editForm.correct_answer" class="ui-textarea" rows="3" />
+        <textarea v-model="editForm.correct_answer" class="ui-textarea" rows="3" required />
         <div class="ui-actions">
           <button type="button" class="ui-btn ui-btn--primary" @click="updateQuestion">Сохранить</button>
           <button type="button" class="ui-btn ui-btn--secondary" @click="editing = null">Отмена</button>
@@ -112,10 +121,18 @@ const fetchTopics = async () => {
 }
 
 const addTopic = async () => {
-  if (!newTopicName.value.trim()) return
-  await api.post('/topics', { name: newTopicName.value.trim() })
-  newTopicName.value = ''
-  await fetchTopics()
+  const name = newTopicName.value.trim()
+  if (!name) {
+    alert('Введите название темы')
+    return
+  }
+  try {
+    await api.post('/topics', { name })
+    newTopicName.value = ''
+    await fetchTopics()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось добавить тему')
+  }
 }
 
 const deleteTopic = async (t) => {
@@ -148,19 +165,52 @@ const applyRec = (r) => {
 }
 
 const createQuestion = async () => {
-  const body = { ...newQuestion.value }
-  if (!body.topic_id) delete body.topic_id
-  await api.post('/questions', body)
-  newQuestion.value = {
-    text: '',
-    topic: '',
-    topic_id: null,
-    difficulty: 'medium',
-    max_score: 1,
-    correct_answer: ''
+  const q = newQuestion.value
+  const text = (q.text || '').trim()
+  const crit = (q.correct_answer || '').trim()
+  const topicTxt = (q.topic || '').trim()
+  const maxS = Number(q.max_score)
+  if (!text) {
+    alert('Введите формулировку вопроса')
+    return
   }
-  recommendations.value = []
-  await fetchQuestions()
+  if (!crit) {
+    alert('Заполните эталон / критерии оценки')
+    return
+  }
+  if (!Number.isFinite(maxS) || maxS < 1 || maxS > 10000) {
+    alert('Максимум баллов — целое число от 1 до 10000')
+    return
+  }
+  if (!q.topic_id && !topicTxt) {
+    alert('Выберите тему из каталога или введите краткое название темы')
+    return
+  }
+  const body = {
+    text,
+    topic: topicTxt || undefined,
+    topic_id: q.topic_id || undefined,
+    difficulty: q.difficulty,
+    max_score: maxS,
+    correct_answer: crit
+  }
+  if (!body.topic_id) delete body.topic_id
+  if (!body.topic) delete body.topic
+  try {
+    await api.post('/questions', body)
+    newQuestion.value = {
+      text: '',
+      topic: '',
+      topic_id: null,
+      difficulty: 'medium',
+      max_score: 1,
+      correct_answer: ''
+    }
+    recommendations.value = []
+    await fetchQuestions()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось создать вопрос')
+  }
 }
 
 const deleteQuestion = async (id) => {
@@ -184,9 +234,40 @@ const editQuestion = (q) => {
 }
 
 const updateQuestion = async () => {
-  await api.put(`/questions/${editing.value}`, editForm.value)
-  editing.value = null
-  await fetchQuestions()
+  const f = editForm.value
+  const text = (f.text || '').trim()
+  const crit = (f.correct_answer || '').trim()
+  const maxS = Number(f.max_score)
+  if (!text) {
+    alert('Текст вопроса не может быть пустым')
+    return
+  }
+  if (!crit) {
+    alert('Эталон / критерии не могут быть пустыми')
+    return
+  }
+  if (!Number.isFinite(maxS) || maxS < 1 || maxS > 10000) {
+    alert('Баллы — целое число от 1 до 10000')
+    return
+  }
+  const topicTxt = (f.topic || '').trim()
+  const payload = {
+    text,
+    correct_answer: crit,
+    max_score: maxS,
+    difficulty: f.difficulty,
+    topic_id: f.topic_id != null && f.topic_id !== '' ? Number(f.topic_id) : null
+  }
+  if (topicTxt) {
+    payload.topic = topicTxt
+  }
+  try {
+    await api.put(`/questions/${editing.value}`, payload)
+    editing.value = null
+    await fetchQuestions()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось сохранить')
+  }
 }
 
 onMounted(() => {
