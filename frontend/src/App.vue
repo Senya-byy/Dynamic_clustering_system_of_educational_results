@@ -61,6 +61,8 @@
     <main class="main-content">
       <router-view />
     </main>
+
+    <YandexMetrika />
   </div>
 </template>
 
@@ -68,6 +70,7 @@
 import { ref, watch } from 'vue'
 import { useAuthStore } from './store/auth'
 import { useRouter, useRoute } from 'vue-router'
+import YandexMetrika from './components/YandexMetrika.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
