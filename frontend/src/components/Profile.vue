@@ -29,6 +29,23 @@
       </div>
       <p v-if="pwdMsg" class="ui-alert" :class="pwdErr ? 'ui-alert--error' : 'ui-alert--ok'">{{ pwdMsg }}</p>
     </div>
+
+    <div class="ui-card">
+      <h3>Обратная связь</h3>
+      <p class="ui-meta" style="margin-top: 0">
+        Сообщите о проблеме, идее или вопросе через форму Class-QR (Google). Откроется в новой вкладке.
+      </p>
+      <p style="margin: 0">
+        <a
+          class="profile-feedback-link"
+          :href="feedbackFormUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть форму обратной связи
+        </a>
+      </p>
+    </div>
   </div>
 </template>
 
@@ -36,6 +53,9 @@
 import { ref, onMounted } from 'vue'
 import api from '../api'
 import { useAuthStore } from '../store/auth'
+import { FEEDBACK_FORM_URL } from '../config/feedback'
+
+const feedbackFormUrl = FEEDBACK_FORM_URL
 
 const authStore = useAuthStore()
 const profile = ref(null)
@@ -103,5 +123,13 @@ onMounted(fetchProfile)
   margin: 0.35rem 0;
   font-size: 0.9rem;
   color: var(--text-muted);
+}
+.profile-feedback-link {
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.profile-feedback-link:hover {
+  text-decoration: underline;
 }
 </style>

@@ -36,6 +36,17 @@
         Демо: <strong>teacher</strong> / teacher123 · <strong>student</strong> / student123 ·
         <strong>admin</strong> / admin123
       </p>
+      <p class="login-feedback">
+        <a
+          class="login-feedback__link"
+          :href="feedbackFormUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Форма обратной связи Class-QR
+        </a>
+        — баги, идеи, вопросы (откроется в новой вкладке).
+      </p>
       <p v-if="error" class="ui-alert ui-alert--error">{{ error }}</p>
     </div>
   </div>
@@ -45,6 +56,9 @@
 import { ref } from 'vue'
 import { useAuthStore } from '../store/auth'
 import { useRouter, useRoute } from 'vue-router'
+import { FEEDBACK_FORM_URL } from '../config/feedback'
+
+const feedbackFormUrl = FEEDBACK_FORM_URL
 
 const authStore = useAuthStore()
 const router = useRouter()
