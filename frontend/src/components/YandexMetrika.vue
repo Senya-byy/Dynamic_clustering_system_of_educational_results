@@ -1,13 +1,5 @@
 <template>
-  <noscript v-if="isProd">
-    <div>
-      <img
-        src="https://mc.yandex.ru/watch/109012791"
-        style="position: absolute; left: -9999px"
-        alt=""
-      />
-    </div>
-  </noscript>
+  <span class="ym-app-hook" aria-hidden="true" />
 </template>
 
 <script setup>
@@ -21,6 +13,24 @@ const TAG_SRC = 'https://mc.yandex.ru/metrika/tag.js?ids=109012791'
 
 let removeAfterEach = null
 
+function findTagScript() {
+  if (typeof document === 'undefined') return null
+  for (let j = 0; j < document.scripts.length; j++) {
+    if (document.scripts[j].src === TAG_SRC) return document.scripts[j]
+  }
+  return null
+}
+
+function ensureYmStub(w) {
+  const i = 'ym'
+  w[i] =
+    w[i] ||
+    function () {
+      ;(w[i].a = w[i].a || []).push(arguments)
+    }
+  w[i].l = Date.now()
+}
+
 onMounted(() => {
   if (!isProd || typeof document === 'undefined') return
 
@@ -28,53 +38,41 @@ onMounted(() => {
   const d = document
   const i = 'ym'
 
-  for (let j = 0; j < d.scripts.length; j++) {
-    if (d.scripts[j].src === TAG_SRC) return
+  ensureYmStub(w)
+
+  if (!findTagScript()) {
+    const anchor = d.getElementsByTagName('script')[0]
+    const s = d.createElement('script')
+    s.type = 'text/javascript'
+    s.async = true
+    s.src = TAG_SRC
+    const parent = anchor?.parentNode || d.head || d.body
+    if (anchor) parent.insertBefore(s, anchor)
+    else parent.appendChild(s)
   }
 
-  w[i] =
-    w[i] ||
-    function () {
-      ;(w[i].a = w[i].a || []).push(arguments)
-    }
-  w[i].l = Date.now()
+  if (w.__ymClassqrInited) return
+  w.__ymClassqrInited = true
 
-  const anchor = d.getElementsByTagName('script')[0]
-  const s = d.createElement('script')
-  s.type = 'text/javascript'
-  s.async = true
-  s.src = TAG_SRC
+  let lastTrackedUrl = w.location.href
 
-  s.onload = () => {
-    if (typeof w[i] !== 'function') return
+  w[i](COUNTER_ID, 'init', {
+    ssr: true,
+    webvisor: true,
+    clickmap: true,
+    ecommerce: 'dataLayer',
+    referrer: d.referrer,
+    url: w.location.href,
+    accurateTrackBounce: true,
+    trackLinks: true,
+  })
 
-    let lastTrackedUrl = w.location.href
-
-    w[i](COUNTER_ID, 'init', {
-      ssr: true,
-      webvisor: true,
-      clickmap: true,
-      ecommerce: 'dataLayer',
-      referrer: d.referrer,
-      url: w.location.href,
-      accurateTrackBounce: true,
-      trackLinks: true,
-    })
-
-    removeAfterEach = router.afterEach(() => {
-      const href = w.location.href
-      if (href === lastTrackedUrl) return
-      lastTrackedUrl = href
-      w[i](COUNTER_ID, 'hit', href)
-    })
-  }
-
-  const parent = anchor?.parentNode || d.head || d.body
-  if (anchor) {
-    parent.insertBefore(s, anchor)
-  } else {
-    parent.appendChild(s)
-  }
+  removeAfterEach = router.afterEach(() => {
+    const href = w.location.href
+    if (href === lastTrackedUrl) return
+    lastTrackedUrl = href
+    w[i](COUNTER_ID, 'hit', href)
+  })
 })
 
 onBeforeUnmount(() => {
@@ -82,3 +80,9 @@ onBeforeUnmount(() => {
   removeAfterEach = null
 })
 </script>
+
+<style scoped>
+.ym-app-hook {
+  display: none;
+}
+</style>
