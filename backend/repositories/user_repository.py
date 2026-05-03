@@ -1,11 +1,20 @@
 # backend/repositories/user_repository.py
-from models import db, User, Group
-from typing import Optional, List
+from typing import List, Optional
+
+from sqlalchemy import func
+
+from models import User, db
+
 
 class UserRepository:
     @staticmethod
     def find_by_login(login: str) -> Optional[User]:
-        return User.query.filter_by(login=login).first()
+        if login is None:
+            return None
+        ln = str(login).strip().lower()
+        if not ln:
+            return None
+        return User.query.filter(func.lower(User.login) == ln).first()
 
     @staticmethod
     def find_by_id(user_id: int) -> Optional[User]:

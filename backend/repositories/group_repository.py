@@ -1,6 +1,9 @@
 # backend/repositories/group_repository.py
-from models import db, Group
 from typing import List, Optional
+
+from sqlalchemy import func
+
+from models import Group, db
 
 
 class GroupRepository:
@@ -15,6 +18,17 @@ class GroupRepository:
     @staticmethod
     def find_all() -> List[Group]:
         return Group.query.order_by(Group.name).all()
+
+    @staticmethod
+    def find_all_ordered() -> List[Group]:
+        return Group.query.order_by(func.lower(Group.name)).all()
+
+    @staticmethod
+    def find_by_name_ci(name: str) -> Optional[Group]:
+        n = (name or "").strip().lower()
+        if not n:
+            return None
+        return Group.query.filter(func.lower(Group.name) == n).first()
 
     @staticmethod
     def create(name: str, teacher_id: int) -> Group:

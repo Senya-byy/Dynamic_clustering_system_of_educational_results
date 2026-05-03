@@ -120,6 +120,25 @@ def _ensure_sessions_join_pin_column():
         conn.execute(text('ALTER TABLE sessions ADD COLUMN join_pin VARCHAR(12)'))
 
 
+def _ensure_groups_unique_name_index():
+    """Уникальность названия группы (create_all не добавляет индекс к уже существующей таблице)."""
+    import logging
+
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+    insp = inspect(db.engine)
+    if 'groups' not in insp.get_table_names():
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text('CREATE UNIQUE INDEX IF NOT EXISTS uq_groups_name ON groups(name)')
+            )
+    except Exception as e:
+        log.warning('Не удалось создать уникальный индекс groups.name: %s', e)
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -174,6 +193,7 @@ def create_app():
             db.create_all()
             _ensure_sqlite_migrations()
             _ensure_sessions_join_pin_column()
+            _ensure_groups_unique_name_index()
             try:
                 seed_enabled_default = "false" if app_env == "production" else "true"
                 if os.environ.get("SEED_DATA", seed_enabled_default).lower() in ("1", "true", "yes"):
@@ -185,6 +205,7 @@ def create_app():
                     db.create_all()
                     _ensure_sqlite_migrations()
                     _ensure_sessions_join_pin_column()
+                    _ensure_groups_unique_name_index()
                     if os.environ.get("SEED_DATA", "true").lower() in ("1", "true", "yes"):
                         seed_data()
                 else:
@@ -218,7 +239,8 @@ def create_app():
     )
     from controllers.rating_controller import get_group_rating
     from controllers.attendance_controller import get_group_stats
-    from controllers.group_controller import list_my_groups
+    from controllers.group_controller import groups_endpoint
+    from controllers.register_controller import register_bp
     from controllers.analytics_controller import (
         get_group_stat,
         get_group_students_metrics,
@@ -250,6 +272,7 @@ def create_app():
     app.add_url_rule('/api/meta/qr-origin', view_func=get_qr_origin, methods=['GET'])
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(register_bp, url_prefix='/api/register')
 
     app.add_url_rule('/api/admin/users', view_func=admin_list_users, methods=['GET'])
     app.add_url_rule('/api/admin/users', view_func=admin_create_user, methods=['POST'])
@@ -283,7 +306,7 @@ def create_app():
     app.add_url_rule('/api/questions/<int:qid>', view_func=update_question, methods=['PUT'])
     app.add_url_rule('/api/questions/<int:qid>', view_func=delete_question, methods=['DELETE'])
 
-    app.add_url_rule('/api/groups', view_func=list_my_groups, methods=['GET'])
+    app.add_url_rule('/api/groups', view_func=groups_endpoint, methods=['GET', 'POST'])
 
     app.add_url_rule('/api/sessions/teacher', view_func=list_teacher_sessions, methods=['GET'])
     app.add_url_rule('/api/sessions/verify-ticket', view_func=verify_join_ticket, methods=['POST'])

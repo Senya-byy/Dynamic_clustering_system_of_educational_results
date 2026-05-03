@@ -56,6 +56,8 @@ class AdminService:
         name = (name or '').strip()
         if not name:
             raise ValueError('Укажите название группы')
+        if self.groups.find_by_name_ci(name):
+            raise ValueError('Группа с таким названием уже есть')
         t = self.users.find_by_id(teacher_id)
         if not t or t.role != 'teacher':
             raise ValueError('Преподаватель не найден или не является teacher')
@@ -70,7 +72,7 @@ class AdminService:
         full_name: str = None,
         group_id: int = None,
     ) -> dict:
-        login = (login or '').strip()
+        login = (login or '').strip().lower()
         if not login or not password:
             raise ValueError('Логин и пароль обязательны')
         if len(str(password)) < 4:
@@ -85,7 +87,12 @@ class AdminService:
                 raise ValueError('Группа не найдена')
         else:
             gid = None
-        u = User(login=login, role=role, full_name=(full_name or '').strip() or None, group_id=gid)
+        u = User(
+            login=login,
+            role=role,
+            full_name=(full_name or '').strip() or None,
+            group_id=gid,
+        )
         u.set_password(password)
         from models import db
         db.session.add(u)
@@ -99,7 +106,7 @@ class AdminService:
         }
 
     def bootstrap_admin(self, login: str, password: str, full_name: str | None = None) -> dict:
-        login = (login or "").strip()
+        login = (login or "").strip().lower()
         if not login or not password:
             raise ValueError("Логин и пароль обязательны")
         if len(str(password)) < 4:

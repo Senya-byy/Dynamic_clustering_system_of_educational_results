@@ -29,6 +29,16 @@
         <option disabled value="">Выберите группу</option>
         <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
+      <div class="add-group-row">
+        <input
+          v-model="newGroupName"
+          class="ui-input"
+          type="text"
+          maxlength="100"
+          placeholder="Название новой группы"
+        />
+        <button type="button" class="ui-btn ui-btn--secondary" @click="addGroup">Добавить группу</button>
+      </div>
 
       <label class="ui-label">Один вопрос (фиксированный)</label>
       <select v-model="selectedQuestionId" class="ui-select">
@@ -171,6 +181,7 @@ const questionCountByTopic = computed(() => {
 })
 
 const selectedGroupId = ref('')
+const newGroupName = ref('')
 const selectedQuestionId = ref('')
 const poolTopicIds = ref([])
 const timerSeconds = ref('')
@@ -223,6 +234,19 @@ const saveSessionTitle = async (s) => {
 const fetchGroups = async () => {
   const res = await api.get('/groups')
   groups.value = res.data
+}
+
+const addGroup = async () => {
+  const n = newGroupName.value.trim()
+  if (!n) return
+  try {
+    const res = await api.post('/groups', { name: n })
+    newGroupName.value = ''
+    await fetchGroups()
+    selectedGroupId.value = String(res.data.id)
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось создать группу')
+  }
 }
 const fetchQuestions = async () => {
   const res = await api.get('/questions')
@@ -374,5 +398,16 @@ onUnmounted(() => stopLive())
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+.add-group-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+  align-items: center;
+}
+.add-group-row .ui-input {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 </style>

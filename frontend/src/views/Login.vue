@@ -30,6 +30,11 @@
         <div class="ui-actions">
           <button type="submit" class="ui-btn ui-btn--primary">Войти</button>
         </div>
+        <div class="ui-actions" style="margin-top: 0.75rem">
+          <router-link class="ui-btn ui-btn--secondary" to="/register" style="text-decoration: none; text-align: center">
+            Зарегистрироваться
+          </router-link>
+        </div>
       </form>
 
       <p class="hint">

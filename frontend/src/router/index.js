@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
+import RegisterChoose from '../views/RegisterChoose.vue'
+import RegisterStudent from '../views/RegisterStudent.vue'
+import RegisterTeacher from '../views/RegisterTeacher.vue'
 import TeacherQuestionCreator from '../components/TeacherQuestionCreator.vue'
 import TeacherSessionManager from '../components/TeacherSessionManager.vue'
 import TeacherCheckPanel from '../components/TeacherCheckPanel.vue'
@@ -19,7 +22,10 @@ import AdminPanel from '../components/AdminPanel.vue'
 const teacherMeta = { roles: ['teacher', 'admin'] }
 
 const routes = [
-  { path: '/login', component: Login },
+  { path: '/login', component: Login, meta: { public: true } },
+  { path: '/register', component: RegisterChoose, meta: { public: true } },
+  { path: '/register/student', component: RegisterStudent, meta: { public: true } },
+  { path: '/register/teacher', component: RegisterTeacher, meta: { public: true } },
   { path: '/join', component: JoinSession, meta: { public: true } },
   { path: '/', redirect: '/login' },
   { path: '/admin', component: AdminPanel, meta: { role: 'admin' } },
@@ -67,12 +73,12 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  if (!token && to.path !== '/login') {
-    next('/login')
+  if (!token && !to.meta?.public) {
+    next({ path: '/login', query: { redirect: to.fullPath } })
     return
   }
 
-  if (to.path === '/login' && token) {
+  if (token && (to.path === '/login' || to.path.startsWith('/register'))) {
     if (role === 'student') {
       next('/student/quiz')
     } else if (role === 'admin') {

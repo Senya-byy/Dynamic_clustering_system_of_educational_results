@@ -532,6 +532,10 @@ body {
   margin: -0.5rem -1.25rem 0;
 }
 
+.login-card--wide {
+  max-width: 520px;
+}
+
 .login-card {
   width: 100%;
   max-width: 400px;

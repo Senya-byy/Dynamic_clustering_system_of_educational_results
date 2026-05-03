@@ -18,7 +18,7 @@ class AuthService:
         self.user_repo = UserRepository()
 
     def login(self, login: str, password: str):
-        user = self.user_repo.find_by_login(login)
+        user = self.user_repo.find_by_login((login or "").strip())
         if not user or not user.check_password(password):
             return None
         token = create_token(user.id, user.login, user.role)

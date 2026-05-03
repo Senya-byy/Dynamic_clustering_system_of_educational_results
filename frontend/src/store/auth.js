@@ -17,24 +17,27 @@ export const useAuthStore = defineStore('auth', {
           return false
         }
         const res = await api.post('/auth/login', { login: lo, password })
-        this.token = res.data.access_token
-        this.role = res.data.role
-        this.userId = String(res.data.user_id)
-        this.groupId = res.data.group_id != null ? String(res.data.group_id) : null
-        localStorage.setItem('access_token', this.token)
-        localStorage.setItem('role', this.role)
-        localStorage.setItem('user_id', this.userId)
-        if (this.groupId) {
-          localStorage.setItem('group_id', this.groupId)
-        } else {
-          localStorage.removeItem('group_id')
-        }
-        await this.fetchProfile()
+        await this.applyAuthPayload(res.data)
         return true
       } catch (e) {
         console.error(e)
         return false
       }
+    },
+    async applyAuthPayload(payload) {
+      this.token = payload.access_token
+      this.role = payload.role
+      this.userId = String(payload.user_id)
+      this.groupId = payload.group_id != null ? String(payload.group_id) : null
+      localStorage.setItem('access_token', this.token)
+      localStorage.setItem('role', this.role)
+      localStorage.setItem('user_id', this.userId)
+      if (this.groupId) {
+        localStorage.setItem('group_id', this.groupId)
+      } else {
+        localStorage.removeItem('group_id')
+      }
+      await this.fetchProfile()
     },
     async fetchProfile() {
       try {
