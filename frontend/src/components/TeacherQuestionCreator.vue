@@ -1,7 +1,7 @@
 <template>
   <div class="page-narrow" style="max-width: 760px">
     <h2>Вопросы</h2>
-    <p class="page-lead">Темы, эталонные ответы и подсказки от сервиса рекомендаций.</p>
+    <p class="page-lead">Темы и вопросы для пар.</p>
 
     <div class="ui-card">
       <h3 style="margin-top: 0">Каталог тем</h3>
@@ -30,9 +30,7 @@
         <option :value="null">—</option>
         <option v-for="t in topics" :key="'sel' + t.id" :value="t.id">{{ t.name }}</option>
       </select>
-      <p class="page-lead" style="margin: 0 0 0.75rem; font-size: 0.85rem">
-        Нужно указать <strong>либо</strong> тему из каталога, <strong>либо</strong> краткий текст темы (можно оба).
-      </p>
+      <p class="page-lead" style="margin: 0 0 0.75rem; font-size: 0.85rem">Тема из списка или краткий текст — хотя бы одно.</p>
       <label class="ui-label">Сложность</label>
       <select v-model="newQuestion.difficulty" class="ui-select">
         <option value="easy">Лёгкий</option>

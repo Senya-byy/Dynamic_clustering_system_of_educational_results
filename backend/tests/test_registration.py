@@ -112,3 +112,66 @@ def test_register_duplicate_group_name(client):
         },
     )
     assert r.status_code == 400
+
+
+def _bearer(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_teacher_add_then_delete_own_group(client):
+    r = client.post(
+        "/api/register/teacher",
+        json={
+            "login": "tgrp",
+            "password": "Secret12",
+            "full_name": "Смирнов Семён Семёнович",
+            "new_group_names": ["Группа-основная"],
+        },
+    )
+    assert r.status_code == 201
+    token = r.json["access_token"]
+    h = _bearer(token)
+
+    add = client.post("/api/groups", headers=h, json={"name": "Группа-доп"})
+    assert add.status_code == 201, add.json
+    gid_extra = add.json["id"]
+
+    gl = client.get("/api/groups", headers=h)
+    assert gl.status_code == 200
+    assert len(gl.json) == 2
+
+    d = client.delete(f"/api/groups/{gid_extra}", headers=h)
+    assert d.status_code == 200, d.json
+
+    gl2 = client.get("/api/groups", headers=h)
+    assert len(gl2.json) == 1
+    assert gl2.json[0]["name"] == "Группа-основная"
+
+
+def test_teacher_cannot_delete_other_teacher_group(client):
+    client.post(
+        "/api/register/teacher",
+        json={
+            "login": "tea_one",
+            "password": "Secret12",
+            "full_name": "Алексеев Алексей Алексеевич",
+            "new_group_names": ["Г-A"],
+        },
+    )
+    r = client.post(
+        "/api/register/teacher",
+        json={
+            "login": "tea_two",
+            "password": "Secret12",
+            "full_name": "Борисов Борис Борисович",
+            "new_group_names": ["Г-B"],
+        },
+    )
+    assert r.status_code == 201
+    token_b = r.json["access_token"]
+    gl = client.get("/api/register/groups")
+    gid_a = next(x["id"] for x in gl.json if x["name"] == "Г-A")
+
+    d = client.delete(f"/api/groups/{gid_a}", headers=_bearer(token_b))
+    assert d.status_code == 400
+    assert "свою" in (d.json.get("error") or "").lower()

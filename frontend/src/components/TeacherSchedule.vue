@@ -1,7 +1,7 @@
 <template>
   <div class="page-narrow" style="max-width: 720px">
     <h2>Расписание</h2>
-    <p class="page-lead">Слоты пар и импорт из CSV.</p>
+    <p class="page-lead">Расписание и импорт CSV.</p>
 
     <div class="ui-card ui-card--muted">
       <div class="ui-row">

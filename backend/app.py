@@ -239,7 +239,7 @@ def create_app():
     )
     from controllers.rating_controller import get_group_rating
     from controllers.attendance_controller import get_group_stats
-    from controllers.group_controller import groups_endpoint
+    from controllers.group_controller import delete_my_group, groups_endpoint
     from controllers.register_controller import register_bp
     from controllers.analytics_controller import (
         get_group_stat,
@@ -307,6 +307,11 @@ def create_app():
     app.add_url_rule('/api/questions/<int:qid>', view_func=delete_question, methods=['DELETE'])
 
     app.add_url_rule('/api/groups', view_func=groups_endpoint, methods=['GET', 'POST'])
+    app.add_url_rule(
+        '/api/groups/<int:gid>',
+        view_func=delete_my_group,
+        methods=['DELETE'],
+    )
 
     app.add_url_rule('/api/sessions/teacher', view_func=list_teacher_sessions, methods=['GET'])
     app.add_url_rule('/api/sessions/verify-ticket', view_func=verify_join_ticket, methods=['POST'])

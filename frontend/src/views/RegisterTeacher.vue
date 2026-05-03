@@ -3,9 +3,7 @@
     <div class="login-card login-card--wide">
       <div class="login-card__logo" aria-hidden="true">▣</div>
       <h2>Регистрация: преподаватель</h2>
-      <p class="subtitle">
-        Логин, пароль, ФИО и хотя бы одна группа (названия не должны совпадать с уже существующими в системе)
-      </p>
+      <p class="subtitle">Логин, пароль, ФИО и хотя бы одна новая группа (имя не должно уже быть в системе).</p>
 
       <form @submit.prevent="submit">
         <label class="ui-label" for="rt-login">Логин</label>
@@ -67,7 +65,7 @@
         </div>
       </form>
 
-      <p class="hint">После входа дополнительные группы можно создать на странице «Пары и QR».</p>
+      <p class="hint">Другие группы можно добавить в «Профиль» после входа.</p>
       <p class="hint">
         <router-link class="login-feedback__link" to="/register">Назад</router-link>
         ·

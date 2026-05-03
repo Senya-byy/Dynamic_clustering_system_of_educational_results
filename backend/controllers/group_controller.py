@@ -3,8 +3,10 @@ from flask import jsonify, request
 
 from middleware.auth_middleware import role_required, token_required
 from repositories.group_repository import GroupRepository
+from services.admin_service import AdminService
 
 group_repo = GroupRepository()
+_admin = AdminService()
 
 
 @token_required
@@ -35,3 +37,15 @@ def groups_endpoint(current_user):
         return jsonify({"id": g.id, "name": g.name, "teacher_id": g.teacher_id}), 201
 
     return jsonify({"error": "Method not allowed"}), 405
+
+
+@token_required
+@role_required(["teacher"])
+def delete_my_group(current_user, gid: int):
+    try:
+        ok = _admin.delete_teacher_own_group(current_user["id"], int(gid))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not ok:
+        return jsonify({"error": "Группа не найдена"}), 404
+    return jsonify({"message": "deleted"}), 200

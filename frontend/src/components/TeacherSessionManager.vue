@@ -2,25 +2,13 @@
   <div class="page-narrow">
     <h2>Пары и динамический QR</h2>
     <p class="page-lead">
-      QR обновляется каждую секунду; каждый код в ссылке действует около 5 секунд, за это время могут войти несколько студентов. Ссылка в QR должна вести на адрес
-      <strong>вашего ноутбука в Wi‑Fi</strong>, а не на <code class="ui-badge">localhost</code> — иначе телефон
-      откроет страницу у себя.
+      Чтобы студент открыл ту же страницу, что и вы, зайдите с ноутбука по адресу в вашей Wi‑Fi сети (не через localhost в адресной строке).
     </p>
     <p v-if="isLocalHostPage && qrFrontendOrigin" class="ui-alert" style="margin-top: 0.75rem">
-      Для QR используется адрес ноутбука в сети:
-      <strong>{{ qrFrontendOrigin }}</strong>
-      (запрос к API подставил его вместо localhost).
+      Для ссылки в QR: <strong>{{ qrFrontendOrigin }}</strong>
     </p>
-    <p
-      v-else-if="isLocalHostPage && !qrFrontendOrigin"
-      class="ui-alert ui-alert--error"
-      style="margin-top: 0.75rem"
-    >
-      Не удалось получить IP для QR. Откройте эту вкладку как
-      <code class="ui-badge">http://&lt;IP-ноутбука&gt;:5173</code>
-      или задайте в <code class="ui-badge">.env</code> переменную
-      <code class="ui-badge">VITE_QR_ORIGIN=http://IP:5173</code>
-      и перезапустите Vite.
+    <p v-else-if="isLocalHostPage && !qrFrontendOrigin" class="ui-alert ui-alert--error" style="margin-top: 0.75rem">
+      Откройте сайт по IP ноутбука в Wi‑Fi или обратитесь к администратору за адресом для QR.
     </p>
 
     <form class="ui-card" @submit.prevent="startSession">
@@ -29,16 +17,6 @@
         <option disabled value="">Выберите группу</option>
         <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
-      <div class="add-group-row">
-        <input
-          v-model="newGroupName"
-          class="ui-input"
-          type="text"
-          maxlength="100"
-          placeholder="Название новой группы"
-        />
-        <button type="button" class="ui-btn ui-btn--secondary" @click="addGroup">Добавить группу</button>
-      </div>
 
       <label class="ui-label">Один вопрос (фиксированный)</label>
       <select v-model="selectedQuestionId" class="ui-select">
@@ -48,9 +26,7 @@
 
       <label class="ui-label">Пул по темам каталога</label>
       <p class="page-lead" style="margin: 0 0 0.5rem; font-size: 0.9rem">
-        Учитываются только вопросы с «Темой из каталога». Каждому студенту при первом входе по QR выдаётся
-        <strong>свой</strong> вопрос из пула (по возможности разные; если вопросов мало — повторения). Вопрос
-        закрепляется до отправки ответа. После ответа повторный вход по QR невозможен.
+        Либо один вопрос выше, либо несколько тем — студентам выдаются вопросы из пула.
       </p>
       <select v-model="poolTopicIds" multiple class="ui-select ui-select--multi">
         <option v-for="t in topics" :key="'tp' + t.id" :value="t.id">
@@ -70,9 +46,7 @@
       <h3>Живой QR</h3>
       <img v-if="liveQr" :src="liveQr" alt="QR" class="qr-img" />
       <p class="mono">Код пары: <strong>{{ sessionCode }}</strong></p>
-      <p class="page-lead" style="margin-bottom: 0.75rem">
-        Студент с ролью <code class="ui-badge">student</code> — по ссылке из QR или вручную (код + пароль ниже).
-      </p>
+      <p class="page-lead" style="margin-bottom: 0.75rem">Студент заходит по QR или по коду и паролю ниже.</p>
       <button
         type="button"
         class="ui-btn ui-btn--ghost"
@@ -85,12 +59,8 @@
         <p class="mono" style="margin: 0 0 0.35rem">
           Код: <strong>{{ sessionCode }}</strong>
         </p>
-        <p class="mono" style="margin: 0">
-          Пароль (не меняется на всей паре): <strong>{{ joinPin || '—' }}</strong>
-        </p>
-        <p class="ui-meta" style="margin: 0.5rem 0 0; font-size: 0.82rem">
-          Диктуйте или показывайте отдельно от QR. С одного телефона нельзя войти под разными аккаунтами; с другого телефона тот же логин — нельзя, если уже зашли с первого.
-        </p>
+        <p class="mono" style="margin: 0">Пароль: <strong>{{ joinPin || '—' }}</strong></p>
+        <p class="ui-meta" style="margin: 0.5rem 0 0; font-size: 0.82rem">На одной паре с одного телефона — один аккаунт студента.</p>
       </div>
       <button type="button" class="ui-btn ui-btn--secondary" @click="stopLive">Остановить обновление</button>
     </div>
@@ -181,7 +151,6 @@ const questionCountByTopic = computed(() => {
 })
 
 const selectedGroupId = ref('')
-const newGroupName = ref('')
 const selectedQuestionId = ref('')
 const poolTopicIds = ref([])
 const timerSeconds = ref('')
@@ -236,18 +205,6 @@ const fetchGroups = async () => {
   groups.value = res.data
 }
 
-const addGroup = async () => {
-  const n = newGroupName.value.trim()
-  if (!n) return
-  try {
-    const res = await api.post('/groups', { name: n })
-    newGroupName.value = ''
-    await fetchGroups()
-    selectedGroupId.value = String(res.data.id)
-  } catch (e) {
-    alert(e.response?.data?.error || 'Не удалось создать группу')
-  }
-}
 const fetchQuestions = async () => {
   const res = await api.get('/questions')
   questions.value = res.data
@@ -398,16 +355,5 @@ onUnmounted(() => stopLive())
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-}
-.add-group-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.5rem 0 0.75rem;
-  align-items: center;
-}
-.add-group-row .ui-input {
-  flex: 1 1 180px;
-  min-width: 0;
 }
 </style>

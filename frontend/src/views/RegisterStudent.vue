@@ -3,7 +3,7 @@
     <div class="login-card login-card--wide">
       <div class="login-card__logo" aria-hidden="true">▣</div>
       <h2>Регистрация: студент</h2>
-      <p class="subtitle">Логин, пароль, ФИО и группа из списка</p>
+      <p class="subtitle">Логин, пароль, ФИО и выбор своей группы.</p>
 
       <form @submit.prevent="submit">
         <label class="ui-label" for="rs-login">Логин</label>
@@ -49,9 +49,7 @@
         />
 
         <label class="ui-label" for="rs-group">Группа</label>
-        <p v-if="groups.length === 0" class="ui-alert">
-          Пока нет ни одной группы. Попросите преподавателя зарегистрироваться и создать группу.
-        </p>
+        <p v-if="groups.length === 0" class="ui-alert">Список групп пуст — попросите преподавателя создать группу.</p>
         <select
           v-else
           id="rs-group"

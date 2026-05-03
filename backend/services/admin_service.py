@@ -133,6 +133,17 @@ class AdminService:
             "group_id": u.group_id,
         }
 
+    def delete_teacher_own_group(self, teacher_id: int, group_id: int) -> bool:
+        u = self.users.find_by_id(teacher_id)
+        if not u or u.role != 'teacher':
+            raise ValueError('Доступно только преподавателю')
+        g = self.groups.find_by_id(group_id)
+        if not g:
+            return False
+        if g.teacher_id != teacher_id:
+            raise ValueError('Можно удалить только свою группу')
+        return self.delete_group(group_id)
+
     def delete_group(self, group_id: int) -> bool:
         g = self.groups.find_by_id(group_id)
         if not g:

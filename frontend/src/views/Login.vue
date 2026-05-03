@@ -42,15 +42,7 @@
         <strong>admin</strong> / admin123
       </p>
       <p class="login-feedback">
-        <a
-          class="login-feedback__link"
-          :href="feedbackFormUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Форма обратной связи Class-QR
-        </a>
-        — баги, идеи, вопросы (откроется в новой вкладке).
+        <a class="login-feedback__link" :href="feedbackFormUrl" target="_blank" rel="noopener noreferrer">Обратная связь</a>
       </p>
       <p v-if="error" class="ui-alert ui-alert--error">{{ error }}</p>
     </div>

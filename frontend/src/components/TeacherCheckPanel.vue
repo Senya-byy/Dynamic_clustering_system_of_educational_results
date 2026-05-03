@@ -1,7 +1,7 @@
 <template>
   <div class="page-narrow" style="max-width: 800px">
     <h2>Проверка ответов</h2>
-    <p class="page-lead">Выберите сессию и выставьте баллы или воспользуйтесь быстрой оценкой.</p>
+    <p class="page-lead">Выберите сессию и выставьте баллы.</p>
 
     <div class="ui-card ui-card--muted">
       <label class="ui-label">Сессия</label>

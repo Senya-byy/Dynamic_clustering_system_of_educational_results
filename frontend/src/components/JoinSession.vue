@@ -5,10 +5,7 @@
       <p v-if="loading" class="ui-meta">Проверка билета…</p>
       <p v-else-if="err" class="ui-alert ui-alert--error">{{ err }}</p>
       <template v-else>
-        <p class="page-lead" style="margin-bottom: 1rem">
-          В ссылке нет параметров <code class="ui-badge">code</code> и
-          <code class="ui-badge">nonce</code>. Отсканируйте актуальный QR у преподавателя (ссылка из QR действует несколько секунд).
-        </p>
+        <p class="page-lead" style="margin-bottom: 1rem">Отсканируйте актуальный QR или введите код вручную.</p>
         <router-link to="/student/quiz" class="ui-btn ui-btn--secondary" style="display: inline-block; text-decoration: none">Ручной ввод кода</router-link>
       </template>
     </div>

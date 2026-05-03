@@ -1,7 +1,7 @@
 <template>
   <div class="page-narrow analytics-shell" style="max-width: 1000px">
     <h2>Аналитика</h2>
-    <p class="page-lead">Сводка по группе, кластеризация и динамика студентов.</p>
+    <p class="page-lead">Выберите группу — данные на вкладках ниже.</p>
 
     <div class="ui-card ui-card--muted">
       <label class="ui-label">Группа</label>

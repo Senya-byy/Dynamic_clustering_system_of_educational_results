@@ -5,10 +5,6 @@
     </div>
     <div v-else class="ui-card">
       <h3 style="margin-top: 0">Кластеризация (k-means)</h3>
-      <p class="ui-meta">
-        Признаки: сумма и средний балл, максимум за ответ, ответы &gt;50% от max, опоздания, доля зачтённых
-        (&gt;70% или верно), задачи по сложности. Комментарии не учитываются.
-      </p>
       <div class="cluster-actions">
         <button type="button" class="ui-btn" :disabled="busy" @click="run">
           {{ busy ? 'Считаем…' : 'Запустить кластеризацию' }}

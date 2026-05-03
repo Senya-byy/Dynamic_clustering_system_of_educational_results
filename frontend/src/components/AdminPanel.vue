@@ -1,10 +1,7 @@
 <template>
   <div class="page-narrow" style="max-width: 920px">
     <h1>Администрирование</h1>
-    <p class="page-lead">
-      Создание групп, преподавателей и учеников. Доступ только для роли
-      <code class="ui-badge ui-badge--accent" style="font-family: inherit">admin</code>.
-    </p>
+    <p class="page-lead">Пользователи и группы (роль admin).</p>
 
     <section class="ui-card">
       <h2>Группы</h2>

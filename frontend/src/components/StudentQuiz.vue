@@ -1,9 +1,7 @@
 <template>
   <div class="page-narrow">
     <h2>Ответ на паре</h2>
-    <p class="page-lead">
-      Вход по ссылке из QR (nonce живёт несколько секунд) или вручную по коду пары и паролю с экрана преподавателя. Вам назначается свой вопрос; после ответа повторно войти нельзя.
-    </p>
+    <p class="page-lead">Войдите по QR или по коду и паролю от преподавателя.</p>
 
     <div v-if="!sessionInfo" class="ui-card">
       <div class="join-mode-row">

@@ -3,7 +3,7 @@
     <div class="login-card login-card--wide">
       <div class="login-card__logo" aria-hidden="true">▣</div>
       <h2>Регистрация</h2>
-      <p class="subtitle">Выберите тип учётной записи</p>
+      <p class="subtitle">Выберите роль.</p>
 
       <div class="register-choose">
         <router-link class="ui-btn ui-btn--primary register-choose__btn" to="/register/student">

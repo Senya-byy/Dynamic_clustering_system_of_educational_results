@@ -18,6 +18,25 @@
       </div>
     </div>
 
+    <div v-if="isTeacher" class="ui-card">
+      <h3>Мои группы</h3>
+      <p class="page-lead" style="margin: 0 0 0.75rem; font-size: 0.9rem">
+        Группы нужны при создании пары. Название не должно совпадать с уже существующим в системе.
+      </p>
+      <ul v-if="myGroups.length" class="ui-list profile-groups">
+        <li v-for="g in myGroups" :key="g.id">
+          <span>{{ g.name }}</span>
+          <button type="button" class="ui-btn ui-btn--danger ui-btn--small" @click="removeGroup(g)">Удалить</button>
+        </li>
+      </ul>
+      <p v-else class="ui-meta" style="margin: 0">Пока нет групп</p>
+      <div class="profile-add-group">
+        <input v-model="newGroupName" class="ui-input" type="text" maxlength="100" placeholder="Новая группа" />
+        <button type="button" class="ui-btn ui-btn--secondary" @click="addGroup">Добавить</button>
+      </div>
+      <p v-if="groupMsg" class="ui-alert" :class="groupErr ? 'ui-alert--error' : 'ui-alert--ok'">{{ groupMsg }}</p>
+    </div>
+
     <div class="ui-card">
       <h3>Смена пароля</h3>
       <label class="ui-label">Текущий пароль</label>
@@ -32,17 +51,9 @@
 
     <div class="ui-card">
       <h3>Обратная связь</h3>
-      <p class="ui-meta" style="margin-top: 0">
-        Сообщите о проблеме, идее или вопросе через форму Class-QR (Google). Откроется в новой вкладке.
-      </p>
       <p style="margin: 0">
-        <a
-          class="profile-feedback-link"
-          :href="feedbackFormUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Открыть форму обратной связи
+        <a class="profile-feedback-link" :href="feedbackFormUrl" target="_blank" rel="noopener noreferrer">
+          Форма Class-QR
         </a>
       </p>
     </div>
@@ -50,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import api from '../api'
 import { useAuthStore } from '../store/auth'
 import { FEEDBACK_FORM_URL } from '../config/feedback'
@@ -58,14 +69,31 @@ import { FEEDBACK_FORM_URL } from '../config/feedback'
 const feedbackFormUrl = FEEDBACK_FORM_URL
 
 const authStore = useAuthStore()
+const isTeacher = computed(() => authStore.role === 'teacher')
+
 const profile = ref(null)
 const pwd = ref({ old: '', new: '' })
 const pwdMsg = ref('')
 const pwdErr = ref(false)
 
+const myGroups = ref([])
+const newGroupName = ref('')
+const groupMsg = ref('')
+const groupErr = ref(false)
+
 const fetchProfile = async () => {
   const res = await api.get('/auth/profile')
   profile.value = res.data
+}
+
+const fetchTeacherGroups = async () => {
+  if (!isTeacher.value) return
+  try {
+    const res = await api.get('/groups')
+    myGroups.value = res.data || []
+  } catch {
+    myGroups.value = []
+  }
 }
 
 const saveProfile = async () => {
@@ -114,7 +142,40 @@ const changePassword = async () => {
   }
 }
 
-onMounted(fetchProfile)
+const addGroup = async () => {
+  groupMsg.value = ''
+  groupErr.value = false
+  const n = newGroupName.value.trim()
+  if (!n) return
+  try {
+    await api.post('/groups', { name: n })
+    newGroupName.value = ''
+    await fetchTeacherGroups()
+    groupMsg.value = 'Группа добавлена'
+  } catch (e) {
+    groupErr.value = true
+    groupMsg.value = e.response?.data?.error || 'Ошибка'
+  }
+}
+
+const removeGroup = async (g) => {
+  if (!confirm(`Удалить группу «${g.name}»?`)) return
+  groupMsg.value = ''
+  groupErr.value = false
+  try {
+    await api.delete(`/groups/${g.id}`)
+    await fetchTeacherGroups()
+    groupMsg.value = 'Группа удалена'
+  } catch (e) {
+    groupErr.value = true
+    groupMsg.value = e.response?.data?.error || 'Ошибка'
+  }
+}
+
+onMounted(async () => {
+  await fetchProfile()
+  await fetchTeacherGroups()
+})
 </script>
 
 <style scoped>
@@ -131,5 +192,24 @@ onMounted(fetchProfile)
 }
 .profile-feedback-link:hover {
   text-decoration: underline;
+}
+.profile-add-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+.profile-add-group .ui-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.profile-groups li {
+  justify-content: space-between;
+  align-items: center;
+}
+.ui-btn--small {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
 }
 </style>

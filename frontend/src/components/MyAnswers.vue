@@ -1,7 +1,7 @@
 <template>
   <div class="page-narrow">
     <h2>Мои ответы</h2>
-    <p class="page-lead">После проверки преподавателя здесь отображаются баллы, комментарий и эталон.</p>
+    <p class="page-lead">Баллы и комментарии появляются после проверки.</p>
 
     <div v-for="ans in answers" :key="ans.id" class="ui-card">
       <p class="block-title">Вопрос</p>
