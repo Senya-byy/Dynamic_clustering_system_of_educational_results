@@ -1,7 +1,9 @@
 <template>
   <div class="login-page">
     <div class="login-card">
-      <div class="login-card__logo" aria-hidden="true">▣</div>
+      <div class="login-card__logo">
+        <img src="/favicon.png" alt="ClassQR" width="44" height="44" />
+      </div>
       <h2>Вход</h2>
       <p class="subtitle">Учёт посещаемости и ответов на парах</p>
 

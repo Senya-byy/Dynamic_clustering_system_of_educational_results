@@ -16,7 +16,10 @@
                 : '/teacher/sessions'
           "
           @click="navMenuOpen = false"
-        >ClassQR</router-link>
+        >
+          <img class="topnav__brand-logo" src="/favicon.png" alt="" width="28" height="28" />
+          <span>ClassQR</span>
+        </router-link>
 
         <button
           type="button"
