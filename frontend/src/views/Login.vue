@@ -1,52 +1,78 @@
 <template>
-  <div class="login-container">
-    <h2>Вход в систему</h2>
-    <form @submit.prevent="handleLogin">
-      <input v-model="login" type="text" placeholder="Логин" required />
-      <input v-model="password" type="password" placeholder="Пароль" required />
-      <button type="submit">Войти</button>
-    </form>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-card__logo" aria-hidden="true">▣</div>
+      <h2>Вход</h2>
+      <p class="subtitle">Учёт посещаемости и ответов на парах</p>
+
+      <form @submit.prevent="handleLogin">
+        <label class="ui-label" for="login">Логин</label>
+        <input
+          id="login"
+          v-model="login"
+          class="ui-input"
+          placeholder="Введите логин"
+          required
+          autocomplete="username"
+        />
+
+        <label class="ui-label" for="password">Пароль</label>
+        <input
+          id="password"
+          v-model="password"
+          class="ui-input"
+          type="password"
+          placeholder="••••••••"
+          required
+          autocomplete="current-password"
+        />
+
+        <div class="ui-actions">
+          <button type="submit" class="ui-btn ui-btn--primary">Войти</button>
+        </div>
+      </form>
+
+      <p class="hint">
+        Демо: <strong>teacher</strong> / teacher123 · <strong>student</strong> / student123 ·
+        <strong>admin</strong> / admin123
+      </p>
+      <p v-if="error" class="ui-alert ui-alert--error">{{ error }}</p>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { useAuthStore } from '../store/auth'
+import { useRouter, useRoute } from 'vue-router'
 
+const authStore = useAuthStore()
+const router = useRouter()
+const route = useRoute()
 const login = ref('')
 const password = ref('')
-const router = useRouter()
+const error = ref('')
 
 const handleLogin = async () => {
-  try {
-    const response = await axios.post('/api/auth/login', {
-      login: login.value,
-      password: password.value
-    })
-    localStorage.setItem('token', response.data.access_token)
-    localStorage.setItem('user', JSON.stringify(response.data.user))
-    
-    // Редирект в зависимости от роли
-    if (response.data.user.role === 'teacher') {
-      router.push('/teacher/dashboard')
-    } else if (response.data.user.role === 'student') {
-      router.push('/student/quiz')
-    } else if (response.data.user.role === 'admin') {
-      router.push('/admin/users')
+  const success = await authStore.login(login.value, password.value)
+  if (success) {
+    const role = authStore.role
+    const redir = route.query.redirect
+    if (typeof redir === 'string' && redir.startsWith('/')) {
+      router.push(redir)
+      return
     }
-  } catch (error) {
-    alert('Ошибка авторизации: ' + error.response?.data?.error || 'Неизвестная ошибка')
+    if (role === 'admin') {
+      router.push('/admin')
+    } else if (role === 'teacher') {
+      router.push('/teacher/sessions')
+    } else if (role === 'student') {
+      router.push('/student/quiz')
+    } else {
+      router.push('/')
+    }
+  } else {
+    error.value = 'Неверный логин или пароль'
   }
 }
 </script>
-
-<style scoped>
-.login-container {
-  max-width: 400px;
-  margin: 100px auto;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-}
-</style>
