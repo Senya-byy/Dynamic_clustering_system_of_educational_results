@@ -39,6 +39,27 @@ class QuestionService:
     def get_questions_by_teacher(self, teacher_id: int) -> List[dict]:
         return [self._to_dict(q) for q in self.repo.find_by_teacher(teacher_id)]
 
+    def search_questions(
+        self,
+        teacher_id: int,
+        course_id: int,
+        q: str = '',
+        topic_id: int | None = None,
+        difficulty: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[dict]:
+        rows = self.repo.search(
+            teacher_id=int(teacher_id),
+            course_id=int(course_id),
+            q=q or '',
+            topic_id=int(topic_id) if topic_id else None,
+            difficulty=difficulty,
+            limit=limit,
+            offset=offset,
+        )
+        return [self._to_dict(x) for x in rows]
+
     def get_question(self, qid: int) -> Dict:
         q = self.repo.find_by_id(qid)
         if not q:
@@ -55,6 +76,7 @@ class QuestionService:
             'text': q.text,
             'topic': q.topic,
             'topic_id': q.topic_id,
+            'course_id': getattr(q, 'course_id', None),
             'difficulty': q.difficulty,
             'max_score': q.max_score,
             'correct_answer': q.correct_answer,

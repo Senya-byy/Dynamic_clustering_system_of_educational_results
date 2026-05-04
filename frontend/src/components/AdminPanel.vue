@@ -34,6 +34,7 @@
             <tr>
               <th>ID</th>
               <th>Название</th>
+              <th>Статус</th>
               <th>Преподаватель</th>
               <th>Логин</th>
               <th />
@@ -43,6 +44,13 @@
             <tr v-for="g in groups" :key="g.id">
               <td>{{ g.id }}</td>
               <td><strong>{{ g.name }}</strong></td>
+              <td>
+                <select v-model="g.status" class="ui-select" @change="saveGroupStatus(g)">
+                  <option value="active">active</option>
+                  <option value="pending">pending</option>
+                  <option value="archived">archived</option>
+                </select>
+              </td>
               <td>{{ g.teacher_id }}</td>
               <td>{{ g.teacher_login }}</td>
               <td>
@@ -182,6 +190,15 @@ const loadTeachers = async () => {
 const loadGroups = async () => {
   const res = await api.get('/admin/groups')
   groups.value = res.data
+}
+
+const saveGroupStatus = async (g) => {
+  try {
+    await api.patch(`/admin/groups/${g.id}/status`, { status: g.status })
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось сохранить статус')
+    await loadGroups()
+  }
 }
 
 const loadUsers = async () => {

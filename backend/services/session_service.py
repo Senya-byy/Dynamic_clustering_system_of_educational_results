@@ -14,7 +14,7 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.device_binding_repository import DeviceBindingRepository
 import hmac
 
-from models import db, Group, Topic, Question, Session as SessionORM, SessionStudentAssignment
+from models import db, Group, Topic, Question, Session as SessionORM, SessionStudentAssignment, SessionGroup, TeacherGroup
 from utils.device_key import normalize_device_key
 from utils.qr_generator import generate_qr_base64
 from utils.session_display import session_display_title
@@ -102,8 +102,8 @@ class SessionService:
             raise
 
     @staticmethod
-    def question_ids_from_topic_ids(topic_ids: List[int], owner_teacher_id: int) -> List[int]:
-        """Все вопросы преподавателя, привязанные к темам каталога (поле topic_id у вопроса)."""
+    def question_ids_from_topic_ids(topic_ids: List[int], course_id: int) -> List[int]:
+        """Все вопросы в выбранном предмете, привязанные к темам каталога (topic_id у вопроса)."""
         if not topic_ids:
             raise ValueError('Не выбраны темы')
         seen_t = set()
@@ -117,24 +117,36 @@ class SessionService:
             t = Topic.query.get(tid)
             if not t:
                 raise ValueError(f'Тема {tid} не найдена')
-            if t.teacher_id != owner_teacher_id:
-                raise ValueError('Тема не из каталога преподавателя этой группы')
+            if int(getattr(t, 'course_id', 0) or 0) != int(course_id):
+                raise ValueError('Тема не из выбранного предмета')
         rows = (
             Question.query.filter(
                 Question.topic_id.in_(ordered_topics),
-                Question.created_by == owner_teacher_id,
+                Question.course_id == int(course_id),
             )
             .order_by(Question.id)
             .all()
         )
         if not rows:
             raise ValueError(
-                'В выбранных темах нет вопросов. При создании вопроса укажите «Тему из каталога».'
+                'В выбранных темах нет вопросов. Создайте вопросы в этом предмете и привяжите их к темам.'
             )
         return [q.id for q in rows]
 
     def create_session(self, data: Dict) -> Dict:
+        group_ids = data.get('group_ids') or []
+        if not isinstance(group_ids, list) or not group_ids:
+            raise ValueError('Не выбраны группы')
+        group_ids = [int(x) for x in group_ids]
+        # For backward compatibility keep sessions.group_id as primary.
+        data = dict(data)
+        data['group_id'] = group_ids[0]
+        if data.get('course_id'):
+            data['course_id'] = int(data['course_id'])
+        data.pop('group_ids', None)
         sess = self.session_repo.create(data)
+        # Persist multi-group mapping.
+        self.session_repo.replace_session_groups(sess.id, group_ids)
         return {
             'id': sess.id,
             'code': sess.code,
@@ -154,11 +166,30 @@ class SessionService:
                 row.join_pin = SessionRepository._generate_join_pin()
                 db.session.commit()
             sess = self.session_repo.find_by_id(session_id)
-        group = Group.query.get(sess.group_id)
         u = self.user_repo.find_by_id(teacher_id)
         is_admin = u and u.role == 'admin'
-        if not group or (group.teacher_id != teacher_id and not is_admin):
-            raise PermissionError('Нет доступа к сессии')
+        if not is_admin:
+            gids = self.session_repo.list_group_ids(sess.id) or [int(sess.group_id)]
+            gids_int = [int(x) for x in gids]
+            ok = (
+                TeacherGroup.query.filter(
+                    TeacherGroup.teacher_id == int(teacher_id),
+                    TeacherGroup.group_id.in_(gids_int),
+                )
+                .limit(1)
+                .count()
+                > 0
+            ) or (
+                Group.query.filter(
+                    Group.id.in_(gids_int),
+                    Group.teacher_id == int(teacher_id),
+                )
+                .limit(1)
+                .count()
+                > 0
+            )
+            if not ok:
+                raise PermissionError('Нет доступа к сессии')
 
         self.session_repo.purge_expired_tickets()
         nonce = secrets.token_urlsafe(24)
@@ -183,7 +214,11 @@ class SessionService:
         user = self.user_repo.find_by_id(student_id)
         if not user or user.role != 'student':
             raise PermissionError('Только студент может входить на пару')
-        if user.group_id != sess.group_id:
+        group_ids = self.session_repo.list_group_ids(sess.id)
+        # Fallback to legacy single-group sessions (before migration).
+        if not group_ids:
+            group_ids = [int(getattr(sess, 'group_id', 0) or 0)]
+        if int(user.group_id or 0) not in [int(x) for x in group_ids]:
             raise PermissionError('Эта пара не для вашей группы')
 
         existing = self.answer_repo.find_by_session_student(sess.id, student_id)
@@ -271,11 +306,31 @@ class SessionService:
         sess = self.session_repo.find_by_id(session_id)
         if not sess:
             return False
-        group = Group.query.get(sess.group_id)
         u = self.user_repo.find_by_id(teacher_id)
         is_admin = u and u.role == 'admin'
-        if group and group.teacher_id != teacher_id and not is_admin:
-            return False
+        if not is_admin:
+            # Teacher must be attached to at least one group of this session.
+            gids = self.session_repo.list_group_ids(sess.id) or [int(sess.group_id)]
+            gids_int = [int(x) for x in gids]
+            ok = (
+                TeacherGroup.query.filter(
+                    TeacherGroup.teacher_id == int(teacher_id),
+                    TeacherGroup.group_id.in_(gids_int),
+                )
+                .limit(1)
+                .count()
+                > 0
+            ) or (
+                Group.query.filter(
+                    Group.id.in_(gids_int),
+                    Group.teacher_id == int(teacher_id),
+                )
+                .limit(1)
+                .count()
+                > 0
+            )
+            if not ok:
+                return False
         return self.session_repo.close_session(session_id)
 
     def list_for_teacher(self, teacher_id: int):
@@ -300,11 +355,30 @@ class SessionService:
         sess = self.session_repo.find_by_id(session_id)
         if not sess:
             return None
-        group = Group.query.get(sess.group_id)
         u = self.user_repo.find_by_id(teacher_id)
         is_admin = u and u.role == 'admin'
-        if not group or (group.teacher_id != teacher_id and not is_admin):
-            raise PermissionError('Нет доступа к сессии')
+        if not is_admin:
+            gids = self.session_repo.list_group_ids(sess.id) or [int(sess.group_id)]
+            gids_int = [int(x) for x in gids]
+            ok = (
+                TeacherGroup.query.filter(
+                    TeacherGroup.teacher_id == int(teacher_id),
+                    TeacherGroup.group_id.in_(gids_int),
+                )
+                .limit(1)
+                .count()
+                > 0
+            ) or (
+                Group.query.filter(
+                    Group.id.in_(gids_int),
+                    Group.teacher_id == int(teacher_id),
+                )
+                .limit(1)
+                .count()
+                > 0
+            )
+            if not ok:
+                raise PermissionError('Нет доступа к сессии')
         self.session_repo.update_title(session_id, title)
         sess = self.session_repo.find_by_id(session_id)
         return {

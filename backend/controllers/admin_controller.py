@@ -81,6 +81,18 @@ def admin_delete_group(current_user, gid):
     return jsonify({'error': 'Группа не найдена'}), 404
 
 
+@token_required
+@role_required(['admin'])
+def admin_patch_group_status(current_user, gid):
+    data = request.get_json() or {}
+    try:
+        status = get_str(data, 'status', required=True, min_len=1, max_len=20)
+        row = admin_service.set_group_status(int(gid), status)
+        return jsonify(row), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
 def bootstrap_admin():
     """
     One-time admin bootstrap for hosted environments without shell access.

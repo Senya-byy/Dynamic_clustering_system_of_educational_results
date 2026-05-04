@@ -39,6 +39,53 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='active')  # active|pending|archived
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TeacherGroup(db.Model):
+    __tablename__ = 'teacher_groups'
+    __table_args__ = (
+        db.UniqueConstraint('teacher_id', 'group_id', name='uq_teacher_groups_teacher_group'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    group_id = db.Column(
+        db.Integer,
+        db.ForeignKey('groups.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Course(db.Model):
+    __tablename__ = 'courses'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    archived = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CourseGroup(db.Model):
+    __tablename__ = 'course_groups'
+    __table_args__ = (
+        db.UniqueConstraint('course_id', 'group_id', name='uq_course_groups_course_group'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(
+        db.Integer,
+        db.ForeignKey('courses.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    group_id = db.Column(
+        db.Integer,
+        db.ForeignKey('groups.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -47,6 +94,7 @@ class Topic(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -54,6 +102,7 @@ class Question(db.Model):
     __tablename__ = 'questions'
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.Text, nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True, index=True)
     topic_id = db.Column(db.Integer, db.ForeignKey('topics.id'), nullable=True)
     topic = db.Column(db.String(100), nullable=True)  # денормализация / legacy
     difficulty = db.Column(db.String(20), nullable=True)
@@ -69,6 +118,7 @@ class Session(db.Model):
     code = db.Column(db.String(10), unique=True, nullable=False)
     qr_code = db.Column(db.Text, nullable=True)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True, index=True)
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(db.String(250), nullable=True)
@@ -79,6 +129,27 @@ class Session(db.Model):
     question_pool_json = db.Column(db.Text, nullable=True)  # JSON list id вопросов
     # Статический PIN для ручного входа (без QR); выдаётся только преподавателю в live-qr.
     join_pin = db.Column(db.String(12), nullable=True)
+
+
+class SessionGroup(db.Model):
+    __tablename__ = 'session_groups'
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'group_id', name='uq_session_groups_session_group'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(
+        db.Integer,
+        db.ForeignKey('sessions.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    group_id = db.Column(
+        db.Integer,
+        db.ForeignKey('groups.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class JoinTicket(db.Model):

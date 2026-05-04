@@ -5,7 +5,7 @@
         <img src="/favicon.png" alt="ClassQR" width="44" height="44" />
       </div>
       <h2>Регистрация: преподаватель</h2>
-      <p class="subtitle">Логин, пароль, ФИО и хотя бы одна новая группа (имя не должно уже быть в системе).</p>
+      <p class="subtitle">Логин, пароль, ФИО и выбор существующих групп и/или добавление новых.</p>
 
       <form @submit.prevent="submit">
         <label class="ui-label" for="rt-login">Логин</label>
@@ -50,13 +50,24 @@
           placeholder="Иванов Иван Иванович"
         />
 
-        <label class="ui-label" for="rt-groups">Группы (по одному названию на строку)</label>
+        <label class="ui-label" for="rt-existing-groups">Выберите существующие группы (можно несколько)</label>
+        <select
+          id="rt-existing-groups"
+          v-model="selectedGroupIds"
+          multiple
+          class="ui-select ui-select--multi"
+        >
+          <option v-for="g in groups" :key="g.id" :value="g.id">
+            {{ g.name }} — {{ g.teacher_name || g.teacher_login || 'преподаватель' }}
+          </option>
+        </select>
+
+        <label class="ui-label" for="rt-groups">Новые группы (если нужной нет в списке, по одному названию на строку)</label>
         <textarea
           id="rt-groups"
           v-model="groupLines"
           class="ui-input ui-textarea"
           rows="5"
-          required
           placeholder="ИТ-251&#10;ИТ-252"
         />
 
@@ -67,7 +78,7 @@
         </div>
       </form>
 
-      <p class="hint">Другие группы можно добавить в «Профиль» после входа.</p>
+      <p class="hint">Другие группы можно добавить позже через «Профиль» или привязку существующей группы.</p>
       <p class="hint">
         <router-link class="login-feedback__link" to="/register">Назад</router-link>
         ·
@@ -79,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 import { useAuthStore } from '../store/auth'
@@ -92,6 +103,8 @@ const password = ref('')
 const password2 = ref('')
 const fullName = ref('')
 const groupLines = ref('')
+const groups = ref([])
+const selectedGroupIds = ref([])
 const error = ref('')
 const loading = ref(false)
 
@@ -118,8 +131,9 @@ const submit = async () => {
     return
   }
   const names = parseGroupNames()
-  if (!names.length) {
-    error.value = 'Укажите хотя бы одно название группы'
+  const gids = (selectedGroupIds.value || []).map((x) => parseInt(x, 10)).filter(Boolean)
+  if (!names.length && !gids.length) {
+    error.value = 'Выберите существующие группы и/или добавьте хотя бы одну новую группу'
     return
   }
   loading.value = true
@@ -128,6 +142,7 @@ const submit = async () => {
       login: login.value,
       password: password.value,
       full_name: fullName.value,
+      group_ids: gids,
       new_group_names: names,
     })
     await authStore.applyAuthPayload(res.data)
@@ -138,6 +153,19 @@ const submit = async () => {
     loading.value = false
   }
 }
+
+const loadGroups = async () => {
+  try {
+    const res = await api.get('/register/groups')
+    groups.value = res.data || []
+  } catch {
+    groups.value = []
+  }
+}
+
+onMounted(() => {
+  loadGroups()
+})
 </script>
 
 <style scoped>

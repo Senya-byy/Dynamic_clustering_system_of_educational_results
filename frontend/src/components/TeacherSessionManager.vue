@@ -12,10 +12,15 @@
     </p>
 
     <form class="ui-card" @submit.prevent="startSession">
-      <label class="ui-label">Группа</label>
-      <select v-model="selectedGroupId" class="ui-select" required>
-        <option disabled value="">Выберите группу</option>
-        <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+      <label class="ui-label">Предмет</label>
+      <select v-model.number="selectedCourseId" class="ui-select" @change="onCourseChange" required>
+        <option disabled :value="0">Выберите предмет</option>
+        <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
+
+      <label class="ui-label">Группы предмета</label>
+      <select v-model="selectedGroupIds" multiple class="ui-select ui-select--multi" required>
+        <option v-for="g in courseGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
 
       <label class="ui-label">Один вопрос (фиксированный)</label>
@@ -136,6 +141,9 @@ const frontendDevPort = () => {
 }
 
 const groups = ref([])
+const courses = ref([])
+const selectedCourseId = ref(0)
+const courseGroups = ref([])
 const questions = ref([])
 const topics = ref([])
 
@@ -150,7 +158,7 @@ const questionCountByTopic = computed(() => {
   return m
 })
 
-const selectedGroupId = ref('')
+const selectedGroupIds = ref([])
 const selectedQuestionId = ref('')
 const poolTopicIds = ref([])
 const timerSeconds = ref('')
@@ -205,12 +213,29 @@ const fetchGroups = async () => {
   groups.value = res.data
 }
 
+const fetchCourses = async () => {
+  const res = await api.get('/courses')
+  courses.value = res.data || []
+  if (!selectedCourseId.value && courses.value.length) {
+    selectedCourseId.value = courses.value[0].id
+  }
+}
+
+const fetchCourseGroups = async () => {
+  if (!selectedCourseId.value) return
+  const res = await api.get(`/courses/${selectedCourseId.value}/groups`)
+  const list = res.data?.groups || []
+  courseGroups.value = list.map((g) => ({ id: g.id, name: g.name }))
+}
+
 const fetchQuestions = async () => {
-  const res = await api.get('/questions')
+  if (!selectedCourseId.value) return
+  const res = await api.get('/questions', { params: { course_id: selectedCourseId.value, limit: 200, offset: 0 } })
   questions.value = res.data
 }
 const fetchTopics = async () => {
-  const res = await api.get('/topics')
+  if (!selectedCourseId.value) return
+  const res = await api.get('/topics', { params: { course_id: selectedCourseId.value } })
   topics.value = res.data
 }
 const fetchSessions = async () => {
@@ -233,8 +258,17 @@ const pollQr = async () => {
 
 const startSession = async () => {
   const body = {
-    group_id: Number(selectedGroupId.value),
+    course_id: selectedCourseId.value,
+    group_ids: (selectedGroupIds.value || []).map((x) => parseInt(x, 10)).filter(Boolean),
     timer_seconds: timerSeconds.value ? parseInt(timerSeconds.value, 10) : null
+  }
+  if (!body.course_id) {
+    alert('Выберите предмет')
+    return
+  }
+  if (!body.group_ids.length) {
+    alert('Выберите хотя бы одну группу')
+    return
   }
   const tpool = poolTopicIds.value.map((x) => parseInt(x, 10)).filter(Boolean)
   if (tpool.length) {
@@ -257,6 +291,15 @@ const startSession = async () => {
   } catch (e) {
     alert(e.response?.data?.error || 'Не удалось создать сессию')
   }
+}
+
+const onCourseChange = async () => {
+  selectedGroupIds.value = []
+  poolTopicIds.value = []
+  selectedQuestionId.value = ''
+  await fetchCourseGroups()
+  await fetchQuestions()
+  await fetchTopics()
 }
 
 const goLive = (s) => {
@@ -290,8 +333,8 @@ const closeSession = async (id) => {
 
 onMounted(async () => {
   fetchGroups()
-  fetchQuestions()
-  fetchTopics()
+  await fetchCourses()
+  await onCourseChange()
   fetchSessions()
   if (isLocalHostPage.value) {
     try {

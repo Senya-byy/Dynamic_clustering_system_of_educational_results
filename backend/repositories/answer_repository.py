@@ -1,7 +1,8 @@
 # backend/repositories/answer_repository.py
-from models import db, Answer
-from datetime import datetime
 from typing import Optional, List
+
+from models import db, Answer, Session
+from datetime import datetime
 
 
 class AnswerRepository:
@@ -25,6 +26,17 @@ class AnswerRepository:
     @staticmethod
     def find_by_student(student_id: int) -> List[Answer]:
         return Answer.query.filter_by(student_id=student_id).all()
+
+    @staticmethod
+    def find_by_student_course(student_id: int, course_id: int) -> List[Answer]:
+        return (
+            Answer.query.join(Session, Session.id == Answer.session_id)
+            .filter(
+                Answer.student_id == int(student_id),
+                Session.course_id == int(course_id),
+            )
+            .all()
+        )
 
     @staticmethod
     def find_by_id(aid: int) -> Optional[Answer]:

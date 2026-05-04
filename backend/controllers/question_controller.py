@@ -1,6 +1,6 @@
 # backend/controllers/question_controller.py
 from flask import request, jsonify
-from models import Topic
+from models import Topic, Course
 from services.question_service import QuestionService
 from middleware.auth_middleware import token_required, role_required
 from utils.validation import require_json, get_str, get_int, get_trimmed_nonblank_str
@@ -18,10 +18,21 @@ def _assert_topic_access(topic_id: int, current_user: dict) -> None:
         raise ValueError("Тема не из вашего каталога")
 
 
+def _assert_course_access(course_id: int, current_user: dict) -> Course:
+    c = Course.query.get(int(course_id))
+    if not c:
+        raise ValueError("Предмет не найден")
+    if current_user["role"] != "admin" and int(c.teacher_id) != int(current_user["id"]):
+        raise ValueError("Предмет не из вашего каталога")
+    return c
+
+
 @token_required
 @role_required(['teacher', 'admin'])
 def create_question(current_user):
     data = require_json(request)
+    course_id = get_int(data, "course_id", required=True, min_value=1)
+    c = _assert_course_access(course_id, current_user)
     data["text"] = get_trimmed_nonblank_str(
         data, "text", required=True, max_len=20_000
     )
@@ -43,6 +54,9 @@ def create_question(current_user):
     topic_free = get_str(data, "topic", required=False, max_len=100)
     if topic_id:
         _assert_topic_access(topic_id, current_user)
+        t = Topic.query.get(topic_id)
+        if t and t.course_id and int(t.course_id) != int(c.id):
+            raise ValueError("Тема не из выбранного предмета")
         data["topic_id"] = topic_id
     else:
         data.pop("topic_id", None)
@@ -55,6 +69,7 @@ def create_question(current_user):
         raise ValueError("Укажите тему из каталога или краткое название темы (поле «Тема (текст)»)")
 
     data["created_by"] = current_user["id"]
+    data["course_id"] = int(c.id)
     q = question_service.create_question(data)
     return jsonify(q), 201
 
@@ -62,7 +77,26 @@ def create_question(current_user):
 @token_required
 @role_required(['teacher', 'admin'])
 def get_questions(current_user):
-    questions = question_service.get_questions_by_teacher(current_user['id'])
+    course_id = request.args.get('course_id', type=int)
+    # Backward compatible: if course_id is omitted, return all teacher questions.
+    if not course_id:
+        questions = question_service.get_questions_by_teacher(current_user['id'])
+        return jsonify(questions), 200
+    _assert_course_access(int(course_id), current_user)
+    q = (request.args.get('q') or '').strip()
+    topic_id = request.args.get('topic_id', type=int)
+    difficulty = (request.args.get('difficulty') or '').strip().lower() or None
+    limit = request.args.get('limit', type=int) or 50
+    offset = request.args.get('offset', type=int) or 0
+    questions = question_service.search_questions(
+        teacher_id=current_user['id'],
+        course_id=int(course_id),
+        q=q,
+        topic_id=topic_id,
+        difficulty=difficulty,
+        limit=limit,
+        offset=offset,
+    )
     return jsonify(questions), 200
 
 

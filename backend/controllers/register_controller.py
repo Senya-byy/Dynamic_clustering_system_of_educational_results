@@ -45,11 +45,14 @@ def register_teacher():
         full_name = get_trimmed_nonblank_str(data, "full_name", required=True, max_len=200)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    raw_ids = data.get("group_ids")
+    if raw_ids is None:
+        raw_ids = []
     raw_names = data.get("new_group_names")
     if raw_names is None:
-        return jsonify({"error": "new_group_names обязателен (массив названий групп)"}), 400
+        raw_names = []
     try:
-        out = _registration.register_teacher(login, password, full_name, raw_names)
+        out = _registration.register_teacher(login, password, full_name, raw_ids, raw_names)
         return jsonify(out), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

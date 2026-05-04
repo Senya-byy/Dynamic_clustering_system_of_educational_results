@@ -3,11 +3,15 @@ from flask import request, jsonify
 from utils.lan_hosts import resolve_public_frontend_base
 from services.session_service import SessionService
 from repositories.group_repository import GroupRepository
+from repositories.course_repository import CourseRepository
+from repositories.question_repository import QuestionRepository
 from middleware.auth_middleware import token_required, role_required
 from utils.validation import require_json, get_int, get_str, get_trimmed_nonblank_str
 
 session_service = SessionService()
 group_repo = GroupRepository()
+course_repo = CourseRepository()
+question_repo = QuestionRepository()
 
 
 def _topic_ids_from_payload(payload: dict) -> list:
@@ -43,19 +47,57 @@ def _topic_ids_from_payload(payload: dict) -> list:
 @role_required(['teacher', 'admin'])
 def create_session(current_user):
     data = require_json(request)
-    gid = get_int(data, "group_id", required=True, min_value=1)
-    g = group_repo.find_by_id(gid)
-    if not g:
-        return jsonify({'error': 'Группа не найдена'}), 404
-    if current_user['role'] == 'teacher' and g.teacher_id != current_user['id']:
-        return jsonify({'error': 'Можно создавать сессии только для своих групп'}), 403
+    course_id = get_int(data, "course_id", required=False, min_value=1)
+    c = None
+    if course_id:
+        c = course_repo.find_by_id(int(course_id))
+        if not c:
+            return jsonify({'error': 'Предмет не найден'}), 404
+        if current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
+            return jsonify({'error': 'Нет доступа к предмету'}), 403
+
+    # Legacy: group_id -> group_ids=[group_id]
+    group_ids = data.get("group_ids")
+    if group_ids is None:
+        gid = get_int(data, "group_id", required=True, min_value=1)
+        group_ids = [gid]
+    if not isinstance(group_ids, list) or not group_ids:
+        return jsonify({'error': 'group_ids должен быть непустым массивом'}), 400
+    try:
+        group_ids = [int(x) for x in group_ids if x is not None and x != ""]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'group_ids должен содержать только числа'}), 400
+    group_ids = [gid for gid in group_ids if gid > 0]
+    if not group_ids:
+        return jsonify({'error': 'group_ids должен быть непустым массивом'}), 400
+    # Уникализируем, сохраняя порядок.
+    seen = set()
+    uniq_group_ids = []
+    for gid in group_ids:
+        if gid in seen:
+            continue
+        seen.add(gid)
+        uniq_group_ids.append(gid)
+    group_ids = uniq_group_ids
+
+    # Группы должны существовать, а преподаватель должен быть к ним привязан.
+    allowed_course_groups = set(course_repo.list_group_ids(c.id)) if c else set()
+    for gid in group_ids:
+        g = group_repo.find_by_id(gid)
+        if not g:
+            return jsonify({'error': f'Группа {gid} не найдена'}), 404
+        if current_user['role'] == 'teacher' and not group_repo.teacher_has_group(current_user['id'], gid):
+            return jsonify({'error': 'Можно создавать сессии только для своих групп'}), 403
+        if allowed_course_groups and int(gid) not in allowed_course_groups:
+            return jsonify({'error': 'Группа не привязана к выбранному предмету'}), 400
 
     topic_ids = _topic_ids_from_payload(data)
     if topic_ids:
         if data.get('question_ids'):
             return jsonify({'error': 'Нельзя одновременно передавать topic_ids и question_ids'}), 400
-        owner = g.teacher_id if current_user['role'] == 'admin' else current_user['id']
-        data['question_ids'] = session_service.question_ids_from_topic_ids(topic_ids, owner)
+        if not c:
+            return jsonify({'error': 'course_id required when using topic_ids'}), 400
+        data['question_ids'] = session_service.question_ids_from_topic_ids(topic_ids, int(c.id))
     data.pop('topic_id', None)
     data.pop('topic_ids', None)
 
@@ -65,6 +107,18 @@ def create_session(current_user):
                 'error': 'Нужен один вопрос (question_id), пул по темам (topic_ids) или явный список question_ids'
             }
         ), 400
+
+    # Backward compatible: infer course_id from question_id for legacy clients/tests.
+    if not c and data.get('question_id'):
+        qrow = question_repo.find_by_id(int(data['question_id']))
+        if qrow and getattr(qrow, 'course_id', None):
+            c = course_repo.find_by_id(int(qrow.course_id))
+            if c and current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
+                return jsonify({'error': 'Нет доступа к предмету'}), 403
+
+    data['group_ids'] = group_ids
+    if c:
+        data['course_id'] = int(c.id)
     data['created_by'] = current_user['id']
     # Validate optional fields early (keep keys/shape for service).
     if "timer_seconds" in data and data.get("timer_seconds") not in (None, ""):

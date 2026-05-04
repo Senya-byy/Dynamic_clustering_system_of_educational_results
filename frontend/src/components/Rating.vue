@@ -10,6 +10,14 @@
       </select>
     </div>
 
+    <div class="ui-card ui-card--muted">
+      <label class="ui-label">Предмет</label>
+      <select v-model="selectedCourseId" class="ui-select" style="max-width: 400px" @change="load">
+        <option disabled value="">Выберите</option>
+        <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
+    </div>
+
     <div class="ui-card">
       <div class="ui-table-wrap">
         <table class="ui-table">
@@ -45,6 +53,8 @@ const authStore = useAuthStore()
 const rating = ref([])
 const groups = ref([])
 const selectedGroupId = ref('')
+const courses = ref([])
+const selectedCourseId = ref('')
 
 const isTeacherLike = computed(
   () => authStore.role === 'teacher' || authStore.role === 'admin'
@@ -52,8 +62,9 @@ const isTeacherLike = computed(
 
 const load = async () => {
   const gid = selectedGroupId.value || authStore.groupId
-  if (!gid) return
-  const res = await api.get('/rating/group', { params: { group_id: gid } })
+  const cid = selectedCourseId.value
+  if (!gid || !cid) return
+  const res = await api.get('/rating/group', { params: { group_id: gid, course_id: cid } })
   rating.value = res.data
 }
 
@@ -64,13 +75,24 @@ onMounted(async () => {
     if (res.data.length) {
       selectedGroupId.value = res.data[0].id
     }
+    const cr = await api.get('/courses')
+    courses.value = (cr.data || []).filter((c) => !c.archived)
+    if (courses.value.length) {
+      selectedCourseId.value = courses.value[0].id
+    }
   } else {
     selectedGroupId.value = authStore.groupId || ''
+    const cr = await api.get('/my/courses')
+    courses.value = cr.data || []
+    if (courses.value.length) {
+      selectedCourseId.value = courses.value[0].id
+    }
   }
   await load()
 })
 
 watch(selectedGroupId, load)
+watch(selectedCourseId, load)
 </script>
 
 <style scoped>

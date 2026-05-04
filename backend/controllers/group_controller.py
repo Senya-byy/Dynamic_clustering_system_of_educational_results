@@ -34,6 +34,8 @@ def groups_endpoint(current_user):
         if group_repo.find_by_name_ci(name):
             return jsonify({"error": "Группа с таким названием уже есть"}), 400
         g = group_repo.create(name, current_user["id"])
+        # Преподаватель, создавший группу, автоматически получает доступ к ней.
+        group_repo.link_teacher_group(current_user["id"], g.id)
         return jsonify({"id": g.id, "name": g.name, "teacher_id": g.teacher_id}), 201
 
     return jsonify({"error": "Method not allowed"}), 405

@@ -139,6 +139,112 @@ def _ensure_groups_unique_name_index():
         log.warning('Не удалось создать уникальный индекс groups.name: %s', e)
 
 
+def _ensure_groups_status_column():
+    """Добавляет groups.status, если колонки ещё нет (SQLite/Postgres)."""
+    import logging
+
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+    insp = inspect(db.engine)
+    if 'groups' not in insp.get_table_names():
+        return
+    cols = {c['name'] for c in insp.get_columns('groups')}
+    if 'status' in cols:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE groups ADD COLUMN status VARCHAR(20) DEFAULT 'active'"))
+    except Exception as e:
+        log.warning('Не удалось добавить groups.status: %s', e)
+
+
+def _ensure_courses_schema():
+    """Добавляет базовые таблицы/колонки для предметов и связей."""
+    import logging
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+    insp = inspect(db.engine)
+    tables = set(insp.get_table_names())
+
+    # Columns first (for existing tables).
+    if 'topics' in tables:
+        cols = {c['name'] for c in insp.get_columns('topics')}
+        if 'course_id' not in cols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE topics ADD COLUMN course_id INTEGER'))
+            except Exception as e:
+                log.warning('Не удалось добавить topics.course_id: %s', e)
+    if 'questions' in tables:
+        qcols = {c['name'] for c in insp.get_columns('questions')}
+        if 'course_id' not in qcols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE questions ADD COLUMN course_id INTEGER'))
+            except Exception as e:
+                log.warning('Не удалось добавить questions.course_id: %s', e)
+    if 'sessions' in tables:
+        scols = {c['name'] for c in insp.get_columns('sessions')}
+        if 'course_id' not in scols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE sessions ADD COLUMN course_id INTEGER'))
+            except Exception as e:
+                log.warning('Не удалось добавить sessions.course_id: %s', e)
+
+    # Backfill/migrate in ORM: create default courses and attach existing topics/questions.
+    try:
+        from models import User, Course, Topic, Question, Session, CourseGroup, Group, TeacherGroup, SessionGroup
+        # Create one default course per teacher if not exists.
+        teachers = User.query.filter_by(role='teacher').all()
+        for t in teachers:
+            default_name = 'Предмет по умолчанию'
+            c = Course.query.filter_by(teacher_id=t.id, name=default_name).first()
+            if not c:
+                c = Course(name=default_name, teacher_id=t.id, archived=False)
+                db.session.add(c)
+                db.session.flush()
+            # assign topics without course_id
+            Topic.query.filter(Topic.teacher_id == t.id, Topic.course_id.is_(None)).update({Topic.course_id: c.id})
+            # assign questions without course_id
+            Question.query.filter(Question.created_by == t.id, Question.course_id.is_(None)).update({Question.course_id: c.id})
+        db.session.commit()
+
+        # sessions.course_id: infer from question.course_id if missing
+        for s in Session.query.filter(Session.course_id.is_(None)).all():
+            q = Question.query.get(s.question_id)
+            if q and q.course_id:
+                s.course_id = q.course_id
+        db.session.commit()
+
+        # Ensure course_groups: default course gets all teacher groups for migration convenience.
+        for t in teachers:
+            c = Course.query.filter_by(teacher_id=t.id, name='Предмет по умолчанию').first()
+            if not c:
+                continue
+            # groups teacher can access (owner or teacher_groups)
+            gids = {g.id for g in Group.query.filter_by(teacher_id=t.id).all()}
+            for tg in TeacherGroup.query.filter_by(teacher_id=t.id).all():
+                gids.add(int(tg.group_id))
+            existing = {int(r.group_id) for r in CourseGroup.query.filter_by(course_id=c.id).all()}
+            for gid in gids:
+                if gid in existing:
+                    continue
+                db.session.add(CourseGroup(course_id=c.id, group_id=int(gid)))
+        db.session.commit()
+
+        # Ensure session_groups for legacy sessions
+        for s in Session.query.all():
+            if SessionGroup.query.filter_by(session_id=s.id).first():
+                continue
+            db.session.add(SessionGroup(session_id=s.id, group_id=int(s.group_id)))
+        db.session.commit()
+    except Exception as e:
+        log.warning('Не удалось выполнить backfill предметов: %s', e)
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -194,6 +300,8 @@ def create_app():
             _ensure_sqlite_migrations()
             _ensure_sessions_join_pin_column()
             _ensure_groups_unique_name_index()
+            _ensure_groups_status_column()
+            _ensure_courses_schema()
             try:
                 seed_enabled_default = "false" if app_env == "production" else "true"
                 if os.environ.get("SEED_DATA", seed_enabled_default).lower() in ("1", "true", "yes"):
@@ -206,6 +314,8 @@ def create_app():
                     _ensure_sqlite_migrations()
                     _ensure_sessions_join_pin_column()
                     _ensure_groups_unique_name_index()
+                    _ensure_groups_status_column()
+                    _ensure_courses_schema()
                     if os.environ.get("SEED_DATA", "true").lower() in ("1", "true", "yes"):
                         seed_data()
                 else:
@@ -238,8 +348,17 @@ def create_app():
         get_session_answers,
     )
     from controllers.rating_controller import get_group_rating
+    from controllers.my_courses_controller import my_courses
     from controllers.attendance_controller import get_group_stats
     from controllers.group_controller import delete_my_group, groups_endpoint
+    from controllers.teacher_groups_controller import attach_group_to_me
+    from controllers.course_controller import (
+        list_courses,
+        create_course,
+        patch_course,
+        get_course_groups,
+        put_course_groups,
+    )
     from controllers.register_controller import register_bp
     from controllers.analytics_controller import (
         get_group_stat,
@@ -266,6 +385,7 @@ def create_app():
         admin_list_teachers,
         admin_delete_user,
         admin_delete_group,
+        admin_patch_group_status,
         bootstrap_admin,
     )
 
@@ -287,6 +407,11 @@ def create_app():
         '/api/admin/groups/<int:gid>',
         view_func=admin_delete_group,
         methods=['DELETE'],
+    )
+    app.add_url_rule(
+        '/api/admin/groups/<int:gid>/status',
+        view_func=admin_patch_group_status,
+        methods=['PATCH'],
     )
     app.add_url_rule('/api/admin/teachers', view_func=admin_list_teachers, methods=['GET'])
     app.add_url_rule('/api/admin/bootstrap', view_func=bootstrap_admin, methods=['POST'])
@@ -311,6 +436,25 @@ def create_app():
         '/api/groups/<int:gid>',
         view_func=delete_my_group,
         methods=['DELETE'],
+    )
+    app.add_url_rule(
+        '/api/teachers/me/groups',
+        view_func=attach_group_to_me,
+        methods=['POST'],
+    )
+
+    app.add_url_rule('/api/courses', view_func=list_courses, methods=['GET'])
+    app.add_url_rule('/api/courses', view_func=create_course, methods=['POST'])
+    app.add_url_rule('/api/courses/<int:cid>', view_func=patch_course, methods=['PATCH'])
+    app.add_url_rule(
+        '/api/courses/<int:cid>/groups',
+        view_func=get_course_groups,
+        methods=['GET'],
+    )
+    app.add_url_rule(
+        '/api/courses/<int:cid>/groups',
+        view_func=put_course_groups,
+        methods=['PUT'],
     )
 
     app.add_url_rule('/api/sessions/teacher', view_func=list_teacher_sessions, methods=['GET'])
@@ -348,6 +492,7 @@ def create_app():
     app.add_url_rule('/api/answers/<int:aid>/grade', view_func=grade_answer, methods=['POST'])
 
     app.add_url_rule('/api/rating/group', view_func=get_group_rating, methods=['GET'])
+    app.add_url_rule('/api/my/courses', view_func=my_courses, methods=['GET'])
     app.add_url_rule('/api/stats/group', view_func=get_group_stats, methods=['GET'])
     app.add_url_rule('/api/analytics/group', view_func=get_group_stat, methods=['GET'])
     app.add_url_rule(

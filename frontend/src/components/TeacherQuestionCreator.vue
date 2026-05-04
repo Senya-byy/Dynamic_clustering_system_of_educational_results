@@ -5,6 +5,14 @@
 
     <div class="ui-card">
       <h3 style="margin-top: 0">Каталог тем</h3>
+      <label class="ui-label">Предмет</label>
+      <select v-model.number="selectedCourseId" class="ui-select" @change="onCourseChange">
+        <option disabled :value="0">Выберите предмет</option>
+        <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
+      <p class="ui-meta" style="margin: 0.5rem 0 0">
+        Управление предметами и группами: <router-link to="/teacher/courses">Предметы</router-link>
+      </p>
       <ul class="topic-chips">
         <li v-for="t in topics" :key="t.id" class="topic-chip">
           <span class="ui-badge ui-badge--accent">{{ t.name }}</span>
@@ -95,6 +103,8 @@ import api from '../api'
 
 const questions = ref([])
 const topics = ref([])
+const courses = ref([])
+const selectedCourseId = ref(0)
 const newTopicName = ref('')
 const newQuestion = ref({
   text: '',
@@ -109,13 +119,28 @@ const editForm = ref({})
 const recommendations = ref([])
 
 const fetchQuestions = async () => {
-  const res = await api.get('/questions')
+  if (!selectedCourseId.value) return
+  const res = await api.get('/questions', { params: { course_id: selectedCourseId.value, limit: 200, offset: 0 } })
   questions.value = res.data
 }
 
 const fetchTopics = async () => {
-  const res = await api.get('/topics')
+  if (!selectedCourseId.value) return
+  const res = await api.get('/topics', { params: { course_id: selectedCourseId.value } })
   topics.value = res.data
+}
+
+const fetchCourses = async () => {
+  const res = await api.get('/courses')
+  courses.value = res.data || []
+  if (!selectedCourseId.value && courses.value.length) {
+    selectedCourseId.value = courses.value[0].id
+  }
+}
+
+const onCourseChange = async () => {
+  await fetchTopics()
+  await fetchQuestions()
 }
 
 const addTopic = async () => {
@@ -124,8 +149,12 @@ const addTopic = async () => {
     alert('Введите название темы')
     return
   }
+  if (!selectedCourseId.value) {
+    alert('Сначала выберите предмет')
+    return
+  }
   try {
-    await api.post('/topics', { name })
+    await api.post('/topics', { name, course_id: selectedCourseId.value })
     newTopicName.value = ''
     await fetchTopics()
   } catch (e) {
@@ -163,6 +192,10 @@ const applyRec = (r) => {
 }
 
 const createQuestion = async () => {
+  if (!selectedCourseId.value) {
+    alert('Сначала выберите предмет')
+    return
+  }
   const q = newQuestion.value
   const text = (q.text || '').trim()
   const crit = (q.correct_answer || '').trim()
@@ -185,6 +218,7 @@ const createQuestion = async () => {
     return
   }
   const body = {
+    course_id: selectedCourseId.value,
     text,
     topic: topicTxt || undefined,
     topic_id: q.topic_id || undefined,
@@ -269,8 +303,7 @@ const updateQuestion = async () => {
 }
 
 onMounted(() => {
-  fetchQuestions()
-  fetchTopics()
+  fetchCourses().then(onCourseChange)
 })
 </script>
 

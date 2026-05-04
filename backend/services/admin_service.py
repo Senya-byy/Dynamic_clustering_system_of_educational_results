@@ -5,6 +5,8 @@ from models import (
     db,
     User,
     Group,
+    TeacherGroup,
+    SessionGroup,
     Topic,
     Question,
     ScheduleSlot,
@@ -47,6 +49,7 @@ class AdminService:
             rows.append({
                 'id': g.id,
                 'name': g.name,
+                'status': getattr(g, 'status', 'active') or 'active',
                 'teacher_id': g.teacher_id,
                 'teacher_login': t.login if t else None,
             })
@@ -62,7 +65,24 @@ class AdminService:
         if not t or t.role != 'teacher':
             raise ValueError('Преподаватель не найден или не является teacher')
         g = self.groups.create(name, teacher_id)
+        # Админ создал группу, но преподаватель-владелец должен иметь к ней доступ.
+        try:
+            self.groups.link_teacher_group(teacher_id, g.id)
+        except Exception:
+            # Если уже связана или constraint, не мешаем созданию группы.
+            pass
         return {'id': g.id, 'name': g.name, 'teacher_id': g.teacher_id}
+
+    def set_group_status(self, group_id: int, status: str) -> dict:
+        status = (status or '').strip().lower()
+        if status not in ('active', 'pending', 'archived'):
+            raise ValueError('status должен быть one of: active, pending, archived')
+        g = self.groups.find_by_id(int(group_id))
+        if not g:
+            raise ValueError('Группа не найдена')
+        g.status = status
+        db.session.commit()
+        return {'id': g.id, 'status': g.status}
 
     def create_user(
         self,
@@ -148,6 +168,9 @@ class AdminService:
         g = self.groups.find_by_id(group_id)
         if not g:
             return False
+        # Clean up m2m links first.
+        TeacherGroup.query.filter_by(group_id=group_id).delete()
+        SessionGroup.query.filter_by(group_id=group_id).delete()
         ScheduleSlot.query.filter_by(group_id=group_id).delete()
         for cr in ClusterRun.query.filter_by(group_id=group_id).all():
             db.session.delete(cr)

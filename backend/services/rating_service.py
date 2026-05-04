@@ -8,11 +8,20 @@ class RatingService:
         self.answer_repo = AnswerRepository()
         self.user_repo = UserRepository()
 
-    def get_group_rating(self, group_id: int, requesting_user_id: int, is_teacher: bool):
+    def get_group_rating(
+        self,
+        group_id: int,
+        requesting_user_id: int,
+        is_teacher: bool,
+        course_id: int | None = None,
+    ):
         students = self.user_repo.find_by_group(group_id)
         result = []
         for s in students:
-            answers = self.answer_repo.find_by_student(s.id)
+            if course_id:
+                answers = self.answer_repo.find_by_student_course(s.id, int(course_id))
+            else:
+                answers = self.answer_repo.find_by_student(s.id)
             total_score = sum(a.score for a in answers if a.score is not None)
             if is_teacher or requesting_user_id == s.id:
                 display_name = s.full_name or s.login

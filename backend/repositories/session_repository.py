@@ -3,6 +3,8 @@ from models import (
     db,
     Session,
     Group,
+    TeacherGroup,
+    SessionGroup,
     JoinTicket,
     Answer,
     Attendance,
@@ -53,6 +55,7 @@ class SessionRepository:
             'code',
             'join_pin',
             'group_id',
+            'course_id',
             'question_id',
             'created_by',
             'timer_seconds',
@@ -108,11 +111,27 @@ class SessionRepository:
     @staticmethod
     def find_by_teacher(teacher_id: int) -> List[Session]:
         return (
-            Session.query.join(Group, Session.group_id == Group.id)
-            .filter(Group.teacher_id == teacher_id)
+            Session.query.join(SessionGroup, SessionGroup.session_id == Session.id)
+            .join(TeacherGroup, TeacherGroup.group_id == SessionGroup.group_id)
+            .filter(TeacherGroup.teacher_id == teacher_id)
             .order_by(Session.start_time.desc())
+            .distinct()
             .all()
         )
+
+    @staticmethod
+    def list_group_ids(session_id: int) -> List[int]:
+        rows = SessionGroup.query.filter_by(session_id=int(session_id)).all()
+        return [int(r.group_id) for r in rows]
+
+    @staticmethod
+    def replace_session_groups(session_id: int, group_ids: List[int]) -> None:
+        session_id = int(session_id)
+        group_ids = [int(x) for x in group_ids]
+        SessionGroup.query.filter_by(session_id=session_id).delete()
+        for gid in group_ids:
+            db.session.add(SessionGroup(session_id=session_id, group_id=gid))
+        db.session.commit()
 
     @staticmethod
     def update_title(sid: int, title: Optional[str]) -> bool:
@@ -205,5 +224,14 @@ class SessionRepository:
 
     @staticmethod
     def delete_sessions_for_group(group_id: int) -> None:
-        for sess in list(Session.query.filter_by(group_id=group_id).all()):
-            SessionRepository.delete_session_cascade(sess.id)
+        group_id = int(group_id)
+        # Sessions can belong to multiple groups via session_groups.
+        sids = {
+            int(r.session_id)
+            for r in SessionGroup.query.filter_by(group_id=group_id).all()
+        }
+        # Legacy fallback: sessions.group_id
+        for sess in Session.query.filter_by(group_id=group_id).all():
+            sids.add(int(sess.id))
+        for sid in list(sids):
+            SessionRepository.delete_session_cascade(sid)

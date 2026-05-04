@@ -68,15 +68,41 @@ class RegistrationService:
             "group_id": u.group_id,
         }
 
-    def register_teacher(self, login: str, password: str, full_name: str, new_group_names: list) -> dict:
+    def register_teacher(
+        self,
+        login: str,
+        password: str,
+        full_name: str,
+        group_ids: list,
+        new_group_names: list,
+    ) -> dict:
         ln = validate_login(login)
         pw = validate_password(password)
         fn = validate_full_name(full_name)
         names = parse_new_group_names(new_group_names)
-        if not names:
-            raise ValueError("Добавьте хотя бы одну группу (уникальное название)")
+        raw_ids = group_ids if isinstance(group_ids, list) else []
+        seen = set()
+        picked_ids: list[int] = []
+        for x in raw_ids:
+            if x is None or x == "":
+                continue
+            try:
+                gid = int(x)
+            except (TypeError, ValueError):
+                raise ValueError("group_ids должен содержать только целые числа")
+            if gid <= 0:
+                continue
+            if gid in seen:
+                continue
+            seen.add(gid)
+            picked_ids.append(gid)
+
+        if not names and not picked_ids:
+            raise ValueError("Выберите существующие группы и/или добавьте хотя бы одну новую группу")
         if len(names) > 25:
-            raise ValueError("Не больше 25 групп за одну регистрацию")
+            raise ValueError("Не больше 25 новых групп за одну регистрацию")
+        if len(picked_ids) > 50:
+            raise ValueError("Не больше 50 выбранных групп за одну регистрацию")
 
         if self.users.find_by_login(ln):
             raise ValueError("Пользователь с таким логином уже есть")
@@ -85,13 +111,27 @@ class RegistrationService:
             if self.groups.find_by_name_ci(name):
                 raise ValueError(f'Группа «{name}» уже существует — выберите другое название')
 
+        existing_groups: list[Group] = []
+        for gid in picked_ids:
+            g = self.groups.find_by_id(gid)
+            if not g:
+                raise ValueError("Выбрана несуществующая группа")
+            existing_groups.append(g)
+
         u = User(login=ln, role="teacher", full_name=fn, group_id=None)
         u.set_password(pw)
         try:
             db.session.add(u)
             db.session.flush()
+            # Связи на уже существующие группы
+            for g in existing_groups:
+                self.groups.link_teacher_group_no_commit(u.id, g.id)
+            # Создание новых групп + связь преподаватель↔группа
             for name in names:
-                db.session.add(Group(name=name.strip(), teacher_id=u.id))
+                ng = Group(name=name.strip(), teacher_id=u.id)
+                db.session.add(ng)
+                db.session.flush()
+                self.groups.link_teacher_group_no_commit(u.id, ng.id)
             db.session.commit()
         except IntegrityError:
             db.session.rollback()

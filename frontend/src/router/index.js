@@ -4,6 +4,7 @@ import RegisterChoose from '../views/RegisterChoose.vue'
 import RegisterStudent from '../views/RegisterStudent.vue'
 import RegisterTeacher from '../views/RegisterTeacher.vue'
 import TeacherQuestionCreator from '../components/TeacherQuestionCreator.vue'
+import TeacherCourses from '../components/TeacherCourses.vue'
 import TeacherSessionManager from '../components/TeacherSessionManager.vue'
 import TeacherCheckPanel from '../components/TeacherCheckPanel.vue'
 import StudentQuiz from '../components/StudentQuiz.vue'
@@ -29,6 +30,7 @@ const routes = [
   { path: '/join', component: JoinSession, meta: { public: true } },
   { path: '/', redirect: '/login' },
   { path: '/admin', component: AdminPanel, meta: { role: 'admin' } },
+  { path: '/teacher/courses', component: TeacherCourses, meta: teacherMeta },
   { path: '/teacher/questions', component: TeacherQuestionCreator, meta: teacherMeta },
   { path: '/teacher/sessions', component: TeacherSessionManager, meta: teacherMeta },
   { path: '/teacher/check', component: TeacherCheckPanel, meta: teacherMeta },
