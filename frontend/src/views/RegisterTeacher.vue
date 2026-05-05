@@ -5,7 +5,7 @@
         <img src="/favicon.png" alt="ClassQR" width="44" height="44" />
       </div>
       <h2>Регистрация: преподаватель</h2>
-      <p class="subtitle">Логин, пароль, ФИО и выбор существующих групп и/или добавление новых.</p>
+      <p class="subtitle">Логин, пароль, ФИО и выбор существующих групп. Новые группы добавляет администратор.</p>
 
       <form @submit.prevent="submit">
         <label class="ui-label" for="rt-login">Логин</label>
@@ -62,15 +62,6 @@
           </option>
         </select>
 
-        <label class="ui-label" for="rt-groups">Новые группы (если нужной нет в списке, по одному названию на строку)</label>
-        <textarea
-          id="rt-groups"
-          v-model="groupLines"
-          class="ui-input ui-textarea"
-          rows="5"
-          placeholder="ИТ-251&#10;ИТ-252"
-        />
-
         <div class="ui-actions">
           <button type="submit" class="ui-btn ui-btn--primary" :disabled="loading">
             {{ loading ? '…' : 'Зарегистрироваться' }}
@@ -78,7 +69,7 @@
         </div>
       </form>
 
-      <p class="hint">Другие группы можно добавить позже через «Профиль» или привязку существующей группы.</p>
+      <p class="hint">Если нужной группы нет в списке — попросите администратора добавить её.</p>
       <p class="hint">
         <router-link class="login-feedback__link" to="/register">Назад</router-link>
         ·
@@ -102,27 +93,10 @@ const login = ref('')
 const password = ref('')
 const password2 = ref('')
 const fullName = ref('')
-const groupLines = ref('')
 const groups = ref([])
 const selectedGroupIds = ref([])
 const error = ref('')
 const loading = ref(false)
-
-const parseGroupNames = () => {
-  const raw = String(groupLines.value || '')
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const out = []
-  const seen = new Set()
-  for (const s of raw) {
-    const k = s.toLowerCase()
-    if (seen.has(k)) continue
-    seen.add(k)
-    out.push(s)
-  }
-  return out
-}
 
 const submit = async () => {
   error.value = ''
@@ -130,10 +104,9 @@ const submit = async () => {
     error.value = 'Пароли не совпадают'
     return
   }
-  const names = parseGroupNames()
   const gids = (selectedGroupIds.value || []).map((x) => parseInt(x, 10)).filter(Boolean)
-  if (!names.length && !gids.length) {
-    error.value = 'Выберите существующие группы и/или добавьте хотя бы одну новую группу'
+  if (!gids.length) {
+    error.value = 'Выберите хотя бы одну группу'
     return
   }
   loading.value = true
@@ -143,7 +116,7 @@ const submit = async () => {
       password: password.value,
       full_name: fullName.value,
       group_ids: gids,
-      new_group_names: names,
+      new_group_names: [],
     })
     await authStore.applyAuthPayload(res.data)
     router.push('/teacher/sessions')

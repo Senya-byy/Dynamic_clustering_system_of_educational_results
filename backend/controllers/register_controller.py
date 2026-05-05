@@ -52,6 +52,8 @@ def register_teacher():
     if raw_names is None:
         raw_names = []
     try:
+        if raw_names:
+            return jsonify({"error": "Новые группы может добавлять только администратор"}), 400
         out = _registration.register_teacher(login, password, full_name, raw_ids, raw_names)
         return jsonify(out), 201
     except ValueError as e:

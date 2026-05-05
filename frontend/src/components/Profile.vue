@@ -21,18 +21,24 @@
     <div v-if="isTeacher" class="ui-card">
       <h3>Мои группы</h3>
       <p class="page-lead" style="margin: 0 0 0.75rem; font-size: 0.9rem">
-        Группы нужны при создании пары. Название не должно совпадать с уже существующим в системе.
+        Группы создаёт администратор. Вы можете только привязать к себе существующую группу.
       </p>
       <ul v-if="myGroups.length" class="ui-list profile-groups">
         <li v-for="g in myGroups" :key="g.id">
           <span>{{ g.name }}</span>
-          <button type="button" class="ui-btn ui-btn--danger ui-btn--small" @click="removeGroup(g)">Удалить</button>
+          <button type="button" class="ui-btn ui-btn--ghost ui-btn--small" @click="detachGroup(g)">
+            Отвязать
+          </button>
         </li>
       </ul>
       <p v-else class="ui-meta" style="margin: 0">Пока нет групп</p>
+
       <div class="profile-add-group">
-        <input v-model="newGroupName" class="ui-input" type="text" maxlength="100" placeholder="Новая группа" />
-        <button type="button" class="ui-btn ui-btn--secondary" @click="addGroup">Добавить</button>
+        <select v-model.number="attachGroupId" class="ui-select ui-grow">
+          <option disabled :value="0">Выберите группу…</option>
+          <option v-for="g in allGroups" :key="'ag' + g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+        <button type="button" class="ui-btn ui-btn--secondary" @click="attachGroup">Привязать</button>
       </div>
       <p v-if="groupMsg" class="ui-alert" :class="groupErr ? 'ui-alert--error' : 'ui-alert--ok'">{{ groupMsg }}</p>
     </div>
@@ -77,7 +83,8 @@ const pwdMsg = ref('')
 const pwdErr = ref(false)
 
 const myGroups = ref([])
-const newGroupName = ref('')
+const allGroups = ref([])
+const attachGroupId = ref(0)
 const groupMsg = ref('')
 const groupErr = ref(false)
 
@@ -93,6 +100,19 @@ const fetchTeacherGroups = async () => {
     myGroups.value = res.data || []
   } catch {
     myGroups.value = []
+  }
+}
+
+const fetchAllGroupsForAttach = async () => {
+  if (!isTeacher.value) return
+  try {
+    const res = await api.get('/register/groups')
+    allGroups.value = res.data || []
+    if (!attachGroupId.value && allGroups.value.length) {
+      attachGroupId.value = allGroups.value[0].id
+    }
+  } catch {
+    allGroups.value = []
   }
 }
 
@@ -142,30 +162,28 @@ const changePassword = async () => {
   }
 }
 
-const addGroup = async () => {
+const attachGroup = async () => {
   groupMsg.value = ''
   groupErr.value = false
-  const n = newGroupName.value.trim()
-  if (!n) return
+  if (!attachGroupId.value) return
   try {
-    await api.post('/groups', { name: n })
-    newGroupName.value = ''
+    await api.post('/teachers/me/groups', { group_id: attachGroupId.value })
     await fetchTeacherGroups()
-    groupMsg.value = 'Группа добавлена'
+    groupMsg.value = 'Группа привязана'
   } catch (e) {
     groupErr.value = true
     groupMsg.value = e.response?.data?.error || 'Ошибка'
   }
 }
 
-const removeGroup = async (g) => {
-  if (!confirm(`Удалить группу «${g.name}»?`)) return
+const detachGroup = async (g) => {
+  if (!confirm(`Отвязать группу «${g.name}»?`)) return
   groupMsg.value = ''
   groupErr.value = false
   try {
-    await api.delete(`/groups/${g.id}`)
+    await api.delete(`/teachers/me/groups/${g.id}`)
     await fetchTeacherGroups()
-    groupMsg.value = 'Группа удалена'
+    groupMsg.value = 'Группа отвязана'
   } catch (e) {
     groupErr.value = true
     groupMsg.value = e.response?.data?.error || 'Ошибка'
@@ -175,6 +193,7 @@ const removeGroup = async (g) => {
 onMounted(async () => {
   await fetchProfile()
   await fetchTeacherGroups()
+  await fetchAllGroupsForAttach()
 })
 </script>
 

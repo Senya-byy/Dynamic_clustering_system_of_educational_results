@@ -351,7 +351,7 @@ def create_app():
     from controllers.my_courses_controller import my_courses
     from controllers.attendance_controller import get_group_stats
     from controllers.group_controller import delete_my_group, groups_endpoint
-    from controllers.teacher_groups_controller import attach_group_to_me
+    from controllers.teacher_groups_controller import attach_group_to_me, detach_group_from_me
     from controllers.course_controller import (
         list_courses,
         create_course,
@@ -441,6 +441,11 @@ def create_app():
         '/api/teachers/me/groups',
         view_func=attach_group_to_me,
         methods=['POST'],
+    )
+    app.add_url_rule(
+        '/api/teachers/me/groups/<int:gid>',
+        view_func=detach_group_from_me,
+        methods=['DELETE'],
     )
 
     app.add_url_rule('/api/courses', view_func=list_courses, methods=['GET'])

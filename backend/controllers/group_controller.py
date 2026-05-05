@@ -25,18 +25,10 @@ def groups_endpoint(current_user):
         )
 
     if request.method == "POST":
-        if current_user.get("role") != "teacher":
-            return jsonify({"error": "Создание группы доступно только преподавателю"}), 403
-        data = request.get_json() or {}
-        name = (data.get("name") or "").strip()
-        if not name:
-            return jsonify({"error": "Укажите название группы"}), 400
-        if group_repo.find_by_name_ci(name):
-            return jsonify({"error": "Группа с таким названием уже есть"}), 400
-        g = group_repo.create(name, current_user["id"])
-        # Преподаватель, создавший группу, автоматически получает доступ к ней.
-        group_repo.link_teacher_group(current_user["id"], g.id)
-        return jsonify({"id": g.id, "name": g.name, "teacher_id": g.teacher_id}), 201
+        return (
+            jsonify({"error": "Создание групп доступно только администратору (через админ-панель)"}),
+            403,
+        )
 
     return jsonify({"error": "Method not allowed"}), 405
 
@@ -44,10 +36,7 @@ def groups_endpoint(current_user):
 @token_required
 @role_required(["teacher"])
 def delete_my_group(current_user, gid: int):
-    try:
-        ok = _admin.delete_teacher_own_group(current_user["id"], int(gid))
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    if not ok:
-        return jsonify({"error": "Группа не найдена"}), 404
-    return jsonify({"message": "deleted"}), 200
+    return (
+        jsonify({"error": "Удаление групп доступно только администратору"}),
+        403,
+    )

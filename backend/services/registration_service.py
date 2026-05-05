@@ -11,7 +11,6 @@ from utils.registration_validation import (
     validate_login,
     validate_password,
     validate_full_name,
-    parse_new_group_names,
 )
 
 
@@ -79,7 +78,11 @@ class RegistrationService:
         ln = validate_login(login)
         pw = validate_password(password)
         fn = validate_full_name(full_name)
-        names = parse_new_group_names(new_group_names)
+        if new_group_names:
+            raise ValueError(
+                "Создание новых групп при регистрации отключено. "
+                "Попросите администратора добавить группу."
+            )
         raw_ids = group_ids if isinstance(group_ids, list) else []
         seen = set()
         picked_ids: list[int] = []
@@ -97,19 +100,13 @@ class RegistrationService:
             seen.add(gid)
             picked_ids.append(gid)
 
-        if not names and not picked_ids:
-            raise ValueError("Выберите существующие группы и/или добавьте хотя бы одну новую группу")
-        if len(names) > 25:
-            raise ValueError("Не больше 25 новых групп за одну регистрацию")
+        if not picked_ids:
+            raise ValueError("Выберите хотя бы одну группу")
         if len(picked_ids) > 50:
             raise ValueError("Не больше 50 выбранных групп за одну регистрацию")
 
         if self.users.find_by_login(ln):
             raise ValueError("Пользователь с таким логином уже есть")
-
-        for name in names:
-            if self.groups.find_by_name_ci(name):
-                raise ValueError(f'Группа «{name}» уже существует — выберите другое название')
 
         existing_groups: list[Group] = []
         for gid in picked_ids:
@@ -126,12 +123,6 @@ class RegistrationService:
             # Связи на уже существующие группы
             for g in existing_groups:
                 self.groups.link_teacher_group_no_commit(u.id, g.id)
-            # Создание новых групп + связь преподаватель↔группа
-            for name in names:
-                ng = Group(name=name.strip(), teacher_id=u.id)
-                db.session.add(ng)
-                db.session.flush()
-                self.groups.link_teacher_group_no_commit(u.id, ng.id)
             db.session.commit()
         except IntegrityError:
             db.session.rollback()

@@ -2,6 +2,7 @@ from flask import jsonify, request
 
 from middleware.auth_middleware import role_required, token_required
 from repositories.group_repository import GroupRepository
+from models import TeacherGroup, db
 
 group_repo = GroupRepository()
 
@@ -26,4 +27,19 @@ def attach_group_to_me(current_user):
 
     group_repo.link_teacher_group(current_user["id"], gid)
     return jsonify({"message": "attached"}), 201
+
+
+@token_required
+@role_required(["teacher"])
+def detach_group_from_me(current_user, gid: int):
+    gid = int(gid)
+    g = group_repo.find_by_id(gid)
+    if not g:
+        return jsonify({"error": "Группа не найдена"}), 404
+    # Owner-группы: teacher_id хранится как legacy owner; не даём «отвязать» её так.
+    if int(g.teacher_id) == int(current_user["id"]):
+        return jsonify({"error": "Нельзя отвязать группу, где вы указаны владельцем"}), 400
+    TeacherGroup.query.filter_by(teacher_id=int(current_user["id"]), group_id=gid).delete()
+    db.session.commit()
+    return jsonify({"message": "detached"}), 200
 
