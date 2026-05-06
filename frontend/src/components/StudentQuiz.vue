@@ -1,0 +1,138 @@
+<template>
+  <div class="page-narrow">
+    <h2>Ответ на паре</h2>
+    <p class="page-lead">
+      Код и одноразовый nonce с экрана преподавателя (QR обновляется каждую секунду).
+    </p>
+
+    <div v-if="!sessionInfo" class="ui-card">
+      <label class="ui-label" for="code">Код сессии</label>
+      <input id="code" v-model="sessionCode" class="ui-input" placeholder="Например AB12CD" />
+
+      <label class="ui-label" for="nonce">Nonce</label>
+      <input id="nonce" v-model="nonce" class="ui-input" placeholder="Из ссылки после сканирования QR" />
+
+      <div class="ui-actions">
+        <button type="button" class="ui-btn ui-btn--primary" @click="verifyTicket">Получить вопрос</button>
+      </div>
+      <p v-if="verifyError" class="ui-alert ui-alert--error">{{ verifyError }}</p>
+    </div>
+
+    <div v-else-if="!answerSubmitted" class="ui-card">
+      <h3>{{ sessionInfo.question.text }}</h3>
+      <p class="ui-meta">
+        Тема: <strong>{{ sessionInfo.question.topic || '—' }}</strong> · Сложность:
+        <span class="ui-badge ui-badge--accent">{{ sessionInfo.question.difficulty || '—' }}</span>
+        · Макс. баллов: <strong>{{ sessionInfo.question.max_score }}</strong>
+      </p>
+      <label class="ui-label" for="ans">Ваш ответ</label>
+      <textarea id="ans" v-model="answerText" class="ui-textarea" rows="6" placeholder="Введите развёрнутый ответ" />
+      <div class="ui-actions">
+        <button type="button" class="ui-btn ui-btn--primary" @click="submitAnswer">Отправить</button>
+      </div>
+      <div v-if="sessionInfo.timer_seconds" class="ui-timer">Таймер пары: {{ timerDisplay }}</div>
+    </div>
+
+    <div v-else class="ui-card ui-card--success">
+      <p style="margin: 0 0 1rem">Ответ отправлен, посещение зафиксировано. Дождитесь проверки.</p>
+      <button type="button" class="ui-btn ui-btn--secondary" @click="goAnswers">Мои ответы и обратная связь</button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import api from '../api'
+import { useRouter, useRoute } from 'vue-router'
+
+const sessionCode = ref('')
+const nonce = ref('')
+const sessionInfo = ref(null)
+const answerText = ref('')
+const answerSubmitted = ref(false)
+const verifyError = ref('')
+const timerSeconds = ref(0)
+let timerInterval = null
+const router = useRouter()
+const route = useRoute()
+
+const loadFromJoin = () => {
+  const raw = sessionStorage.getItem('active_session_payload')
+  if (!raw) return false
+  try {
+    sessionInfo.value = JSON.parse(raw)
+    sessionCode.value = sessionInfo.value.code
+    sessionStorage.removeItem('active_session_payload')
+    if (sessionInfo.value.timer_seconds) {
+      timerSeconds.value = sessionInfo.value.timer_seconds
+      startTimer()
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+onMounted(() => {
+  if (route.query.from === 'join' && loadFromJoin()) {
+    return
+  }
+})
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (route.query.from === 'join' && loadFromJoin()) {
+      verifyError.value = ''
+    }
+  }
+)
+
+const verifyTicket = async () => {
+  verifyError.value = ''
+  try {
+    const res = await api.post('/sessions/verify-ticket', {
+      code: sessionCode.value.trim(),
+      nonce: nonce.value.trim()
+    })
+    sessionInfo.value = res.data
+    if (res.data.timer_seconds) {
+      timerSeconds.value = res.data.timer_seconds
+      startTimer()
+    }
+  } catch (e) {
+    verifyError.value = e.response?.data?.error || 'Ошибка'
+  }
+}
+
+const startTimer = () => {
+  if (timerInterval) clearInterval(timerInterval)
+  timerInterval = setInterval(() => {
+    if (timerSeconds.value > 0) timerSeconds.value--
+  }, 1000)
+}
+
+const submitAnswer = async () => {
+  await api.post('/answers/submit', {
+    session_code: sessionCode.value.trim(),
+    text: answerText.value
+  })
+  answerSubmitted.value = true
+  if (timerInterval) clearInterval(timerInterval)
+}
+
+const goAnswers = () => {
+  router.push('/my-answers')
+}
+
+const timerDisplay = computed(() => {
+  const t = timerSeconds.value
+  const min = Math.floor(t / 60)
+  const sec = t % 60
+  return `${min}:${sec < 10 ? '0' : ''}${sec}`
+})
+
+onUnmounted(() => {
+  if (timerInterval) clearInterval(timerInterval)
+})
+</script>
