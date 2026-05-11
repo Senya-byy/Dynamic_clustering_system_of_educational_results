@@ -32,7 +32,7 @@ class ScheduleService:
             return False
         if role == 'admin':
             return True
-        if role == 'teacher' and g.teacher_id == user_id:
+        if role == 'teacher' and self.group_repo.teacher_has_group(user_id, group_id):
             return True
         if role == 'student':
             u = self.user_repo.find_by_id(user_id)
@@ -73,7 +73,7 @@ class ScheduleService:
             title = str(raw_title).strip()[:200]
         row = self.repo.create({
             'group_id': group_id,
-            'teacher_id': g.teacher_id,
+            'teacher_id': user_id,
             'weekday': wd,
             'start_time': start_t,
             'end_time': end_t,
@@ -88,9 +88,8 @@ class ScheduleService:
             return False
         if role not in ('teacher', 'admin'):
             raise PermissionError('Запрещено')
-        g = self.group_repo.find_by_id(row.group_id)
         is_admin = role == 'admin'
-        if not is_admin and g.teacher_id != user_id:
+        if not is_admin and not self.group_repo.teacher_has_group(user_id, row.group_id):
             raise PermissionError('Нет доступа')
         return self.repo.delete(slot_id)
 
@@ -101,9 +100,8 @@ class ScheduleService:
             return None
         if role not in ('teacher', 'admin'):
             raise PermissionError('Запрещено')
-        g = self.group_repo.find_by_id(row.group_id)
         is_admin = role == 'admin'
-        if not is_admin and g.teacher_id != user_id:
+        if not is_admin and not self.group_repo.teacher_has_group(user_id, row.group_id):
             raise PermissionError('Нет доступа')
         allowed = {'weekday', 'start_time', 'end_time', 'title'}
         patch = {k: v for k, v in data.items() if k in allowed}

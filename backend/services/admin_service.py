@@ -45,7 +45,7 @@ class AdminService:
     def list_groups(self) -> List[dict]:
         rows = []
         for g in self.groups.find_all():
-            t = self.users.find_by_id(g.teacher_id)
+            t = self.users.find_by_id(g.teacher_id) if g.teacher_id else None
             rows.append({
                 'id': g.id,
                 'name': g.name,
@@ -55,22 +55,13 @@ class AdminService:
             })
         return rows
 
-    def create_group(self, name: str, teacher_id: int) -> dict:
+    def create_group(self, name: str) -> dict:
         name = (name or '').strip()
         if not name:
             raise ValueError('Укажите название группы')
         if self.groups.find_by_name_ci(name):
             raise ValueError('Группа с таким названием уже есть')
-        t = self.users.find_by_id(teacher_id)
-        if not t or t.role != 'teacher':
-            raise ValueError('Преподаватель не найден или не является teacher')
-        g = self.groups.create(name, teacher_id)
-        # Админ создал группу, но преподаватель-владелец должен иметь к ней доступ.
-        try:
-            self.groups.link_teacher_group(teacher_id, g.id)
-        except Exception:
-            # Если уже связана или constraint, не мешаем созданию группы.
-            pass
+        g = self.groups.create(name, None)
         return {'id': g.id, 'name': g.name, 'teacher_id': g.teacher_id}
 
     def set_group_status(self, group_id: int, status: str) -> dict:
@@ -177,8 +168,8 @@ class AdminService:
         g = self.groups.find_by_id(group_id)
         if not g:
             return False
-        if g.teacher_id != teacher_id:
-            raise ValueError('Можно удалить только свою группу')
+        if not self.groups.teacher_has_group(teacher_id, group_id):
+            raise ValueError('Нет доступа к этой группе')
         return self.delete_group(group_id)
 
     def delete_group(self, group_id: int) -> bool:

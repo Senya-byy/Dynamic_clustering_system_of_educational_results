@@ -10,7 +10,7 @@ from utils.error_handlers import register_error_handlers
 
 
 def seed_data():
-    from models import User, Group, Topic, Question
+    from models import User, Group, Topic, Question, TeacherGroup
 
     if User.query.filter_by(login='teacher').first():
         return
@@ -42,8 +42,11 @@ def seed_data():
     db.session.add_all([teacher, admin, student])
     db.session.commit()
 
-    grp = Group(name='ИТ-251', teacher_id=teacher.id)
+    grp = Group(name='ИТ-251', teacher_id=None)
     db.session.add(grp)
+    db.session.commit()
+
+    db.session.add(TeacherGroup(teacher_id=teacher.id, group_id=grp.id))
     db.session.commit()
 
     student.group_id = grp.id
@@ -176,6 +179,70 @@ def _ensure_groups_status_column():
             conn.execute(text("ALTER TABLE groups ADD COLUMN status VARCHAR(20) DEFAULT 'active'"))
     except Exception as e:
         log.warning('Не удалось добавить groups.status: %s', e)
+
+
+def _ensure_groups_teacher_id_nullable():
+    """Делает groups.teacher_id nullable (группа без «владельца»). SQLite — пересборка таблицы."""
+    import logging
+
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+    insp = inspect(db.engine)
+    if 'groups' not in insp.get_table_names():
+        return
+    dialect = db.engine.dialect.name
+    if dialect == 'postgresql':
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE groups ALTER COLUMN teacher_id DROP NOT NULL'))
+        except Exception as e:
+            log.debug('groups.teacher_id nullable (postgres): %s', e)
+        return
+    if dialect != 'sqlite':
+        return
+    try:
+        with db.engine.connect() as conn:
+            rows = conn.execute(text('PRAGMA table_info(groups)')).fetchall()
+    except Exception as e:
+        log.warning('PRAGMA table_info(groups): %s', e)
+        return
+    tr = next((r for r in rows if r[1] == 'teacher_id'), None)
+    if not tr or int(tr[3]) == 0:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text('PRAGMA foreign_keys=OFF'))
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE groups__teacher_nullable (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        name VARCHAR(100) NOT NULL,
+                        teacher_id INTEGER,
+                        status VARCHAR(20) NOT NULL DEFAULT 'active',
+                        created_at DATETIME,
+                        FOREIGN KEY(teacher_id) REFERENCES users (id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO groups__teacher_nullable (id, name, teacher_id, status, created_at)
+                    SELECT id, name, teacher_id, COALESCE(status, 'active'), created_at FROM groups
+                    """
+                )
+            )
+            conn.execute(text('DROP TABLE groups'))
+            conn.execute(text('ALTER TABLE groups__teacher_nullable RENAME TO groups'))
+            conn.execute(
+                text('CREATE UNIQUE INDEX IF NOT EXISTS uq_groups_name ON groups(name)')
+            )
+            conn.execute(text('PRAGMA foreign_keys=ON'))
+    except Exception as e:
+        log.warning('Не удалось сделать groups.teacher_id nullable (sqlite): %s', e)
 
 
 def _ensure_courses_schema():
@@ -321,6 +388,7 @@ def create_app():
             _ensure_sessions_frozen_qr_nonce_column()
             _ensure_groups_unique_name_index()
             _ensure_groups_status_column()
+            _ensure_groups_teacher_id_nullable()
             _ensure_courses_schema()
             try:
                 seed_enabled_default = "false" if app_env == "production" else "true"
@@ -336,6 +404,7 @@ def create_app():
                     _ensure_sessions_frozen_qr_nonce_column()
                     _ensure_groups_unique_name_index()
                     _ensure_groups_status_column()
+                    _ensure_groups_teacher_id_nullable()
                     _ensure_courses_schema()
                     if os.environ.get("SEED_DATA", "true").lower() in ("1", "true", "yes"):
                         seed_data()

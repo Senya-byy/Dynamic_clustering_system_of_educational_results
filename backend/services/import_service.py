@@ -30,11 +30,11 @@ class ImportService:
             g = self.groups.find_by_id(gid)
             if not g:
                 continue
-            if role != 'admin' and g.teacher_id != teacher_id:
+            if role != 'admin' and not self.groups.teacher_has_group(teacher_id, gid):
                 continue
             self.sched.create({
                 'group_id': gid,
-                'teacher_id': g.teacher_id,
+                'teacher_id': teacher_id,
                 'weekday': int(row['weekday']),
                 'start_time': row['start_time'].strip(),
                 'end_time': row['end_time'].strip(),

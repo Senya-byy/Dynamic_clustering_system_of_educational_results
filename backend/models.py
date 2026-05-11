@@ -38,7 +38,8 @@ class Group(db.Model):
     __tablename__ = 'groups'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Legacy «владелец»; новые группы без владельца (NULL). Доступ преподавателей — teacher_groups.
+    teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     status = db.Column(db.String(20), nullable=False, default='active')  # active|pending|archived
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

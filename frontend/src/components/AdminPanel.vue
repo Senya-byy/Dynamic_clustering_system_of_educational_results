@@ -10,15 +10,6 @@
           <label class="ui-label">Название</label>
           <input v-model="newGroup.name" class="ui-input" placeholder="Например ИТ-252" required />
         </div>
-        <div class="ui-grow">
-          <label class="ui-label">Преподаватель</label>
-          <select v-model.number="newGroup.teacher_id" class="ui-select" required>
-            <option disabled :value="0">Выберите</option>
-            <option v-for="t in teachers" :key="t.id" :value="t.id">
-              {{ t.login }}<template v-if="t.full_name"> — {{ t.full_name }}</template>
-            </option>
-          </select>
-        </div>
         <button type="submit" class="ui-btn ui-btn--primary">Создать группу</button>
       </form>
       <p
@@ -35,7 +26,7 @@
               <th>ID</th>
               <th>Название</th>
               <th>Статус</th>
-              <th>Преподаватель</th>
+              <th>Владелец (legacy)</th>
               <th>Логин</th>
               <th />
             </tr>
@@ -190,7 +181,7 @@ const groups = ref([])
 const teachers = ref([])
 const users = ref([])
 
-const newGroup = ref({ name: '', teacher_id: 0 })
+const newGroup = ref({ name: '' })
 const newTeacher = ref({ login: '', password: '', full_name: '' })
 const newStudent = ref({ login: '', password: '', full_name: '', group_id: null })
 
@@ -207,9 +198,6 @@ const resetResult = ref(null)
 const loadTeachers = async () => {
   const res = await api.get('/admin/teachers')
   teachers.value = res.data
-  if (teachers.value.length && !newGroup.value.teacher_id) {
-    newGroup.value.teacher_id = teachers.value[0].id
-  }
 }
 
 const loadGroups = async () => {
@@ -279,14 +267,9 @@ const createGroup = async () => {
     msg.group = { ok: false, text: 'Укажите название группы' }
     return
   }
-  if (!newGroup.value.teacher_id) {
-    msg.group = { ok: false, text: 'Выберите преподавателя' }
-    return
-  }
   try {
     await api.post('/admin/groups', {
-      name,
-      teacher_id: newGroup.value.teacher_id
+      name
     })
     newGroup.value.name = ''
     msg.group = { ok: true, text: 'Группа создана' }

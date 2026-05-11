@@ -27,7 +27,7 @@ class GroupRepository:
         teacher_id = int(teacher_id)
         group_id = int(group_id)
         g = Group.query.get(group_id)
-        if g and int(g.teacher_id) == teacher_id:
+        if g and g.teacher_id is not None and int(g.teacher_id) == teacher_id:
             return True
         return (
             TeacherGroup.query.filter_by(teacher_id=teacher_id, group_id=group_id)
@@ -70,7 +70,7 @@ class GroupRepository:
         return Group.query.filter(func.lower(Group.name) == n).first()
 
     @staticmethod
-    def create(name: str, teacher_id: int) -> Group:
+    def create(name: str, teacher_id: Optional[int] = None) -> Group:
         g = Group(name=name.strip(), teacher_id=teacher_id)
         db.session.add(g)
         db.session.commit()

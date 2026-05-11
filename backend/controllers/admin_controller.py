@@ -42,11 +42,8 @@ def admin_list_groups(current_user):
 @role_required(['admin'])
 def admin_create_group(current_user):
     data = request.get_json() or {}
-    tid = data.get('teacher_id')
-    if tid is None:
-        return jsonify({'error': 'teacher_id обязателен'}), 400
     try:
-        row = admin_service.create_group(data.get('name', ''), int(tid))
+        row = admin_service.create_group(data.get('name', ''))
         return jsonify(row), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400

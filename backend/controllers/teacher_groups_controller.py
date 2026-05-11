@@ -36,10 +36,10 @@ def detach_group_from_me(current_user, gid: int):
     g = group_repo.find_by_id(gid)
     if not g:
         return jsonify({"error": "Группа не найдена"}), 404
-    # Owner-группы: teacher_id хранится как legacy owner; не даём «отвязать» её так.
-    if int(g.teacher_id) == int(current_user["id"]):
-        return jsonify({"error": "Нельзя отвязать группу, где вы указаны владельцем"}), 400
     TeacherGroup.query.filter_by(teacher_id=int(current_user["id"]), group_id=gid).delete()
+    # Снять legacy-владельца, если это были вы — иначе группа останется в «моих» только по teacher_id.
+    if g.teacher_id is not None and int(g.teacher_id) == int(current_user["id"]):
+        g.teacher_id = None
     db.session.commit()
     return jsonify({"message": "detached"}), 200
 
