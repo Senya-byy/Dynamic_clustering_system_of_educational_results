@@ -1,12 +1,16 @@
 # backend/services/admin_service.py
 from typing import Dict, List
 
+from sqlalchemy import or_
+
 from models import (
     db,
     User,
     Group,
     TeacherGroup,
     SessionGroup,
+    Session,
+    Course,
     Topic,
     Question,
     ScheduleSlot,
@@ -223,13 +227,36 @@ class AdminService:
         Reminder.query.filter_by(teacher_id=user_id).delete()
         Answer.query.filter_by(checked_by=user_id).update({Answer.checked_by: None})
         db.session.commit()
+        TeacherGroup.query.filter_by(teacher_id=user_id).delete()
+        ScheduleSlot.query.filter_by(teacher_id=user_id).delete()
         for g in list(Group.query.filter_by(teacher_id=user_id).all()):
             self.delete_group(g.id)
-        for q in list(Question.query.filter_by(created_by=user_id).all()):
+
+        course_ids = [c.id for c in Course.query.filter_by(teacher_id=user_id).all()]
+        sess_conds = [Session.created_by == user_id]
+        if course_ids:
+            sess_conds.append(Session.course_id.in_(course_ids))
+        for sess in list(Session.query.filter(or_(*sess_conds)).all()):
+            SessionRepository.delete_session_cascade(sess.id)
+
+        q_conds = [Question.created_by == user_id]
+        if course_ids:
+            q_conds.append(Question.course_id.in_(course_ids))
+        for q in list(Question.query.filter(or_(*q_conds)).all()):
             SessionRepository.purge_question_from_sessions(q.id)
             db.session.delete(q)
-        for t in list(Topic.query.filter_by(teacher_id=user_id).all()):
+
+        t_conds = [Topic.teacher_id == user_id]
+        if course_ids:
+            t_conds.append(Topic.course_id.in_(course_ids))
+        for t in list(Topic.query.filter(or_(*t_conds)).all()):
             db.session.delete(t)
+
+        for cid in list(course_ids):
+            c = Course.query.get(cid)
+            if c:
+                db.session.delete(c)
+
         row = User.query.get(user_id)
         if row:
             db.session.delete(row)
