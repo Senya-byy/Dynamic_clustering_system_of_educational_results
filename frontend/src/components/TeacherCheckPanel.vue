@@ -1,13 +1,19 @@
 <template>
   <div class="page-narrow" style="max-width: 800px">
     <h2>Проверка ответов</h2>
-    <p class="page-lead">Выберите сессию и выставьте баллы.</p>
+    <p class="page-lead">Выберите предмет, затем сессию и выставьте баллы.</p>
 
     <div class="ui-card ui-card--muted">
+      <label class="ui-label">Предмет</label>
+      <select v-model.number="selectedCourseId" class="ui-select" @change="onCourseChange">
+        <option disabled :value="0">Выберите предмет</option>
+        <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
+
       <label class="ui-label">Сессия</label>
       <select v-model="selectedSessionId" class="ui-select" @change="loadAnswers">
         <option disabled value="">Выберите сессию</option>
-        <option v-for="s in sessions" :key="s.id" :value="s.id">
+        <option v-for="s in filteredSessions" :key="s.id" :value="s.id">
           {{ s.display_title || s.code }} · {{ s.code }}
         </option>
       </select>
@@ -80,14 +86,34 @@
 import { ref, onMounted, computed } from 'vue'
 import api from '../api'
 
+const courses = ref([])
+const selectedCourseId = ref(0)
 const sessions = ref([])
 const selectedSessionId = ref('')
 const answers = ref([])
 const tab = ref('pending')
 
+const fetchCourses = async () => {
+  const res = await api.get('/courses')
+  courses.value = res.data || []
+  if (!selectedCourseId.value && courses.value.length) {
+    selectedCourseId.value = courses.value[0].id
+  }
+}
+
 const fetchSessions = async () => {
   const res = await api.get('/sessions/teacher')
   sessions.value = res.data
+}
+
+const filteredSessions = computed(() => {
+  if (!selectedCourseId.value) return []
+  return (sessions.value || []).filter((s) => Number(s.course_id || 0) === Number(selectedCourseId.value))
+})
+
+const onCourseChange = async () => {
+  selectedSessionId.value = ''
+  answers.value = []
 }
 
 const loadAnswers = async () => {
@@ -144,7 +170,10 @@ const quickGrade = async (ans, ok) => {
   await gradeAnswer(ans)
 }
 
-onMounted(fetchSessions)
+onMounted(async () => {
+  await fetchCourses()
+  await fetchSessions()
+})
 </script>
 
 <style scoped>

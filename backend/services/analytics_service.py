@@ -8,7 +8,7 @@ from repositories.session_repository import SessionRepository
 from repositories.answer_repository import AnswerRepository
 from repositories.user_repository import UserRepository
 from repositories.cluster_repository import ClusterRunRepository
-from models import Question, Session, User
+from models import Course, Question, Session, User
 from services.clustering_service import (
     FEATURE_KEYS,
     FEATURE_LABELS_RU,
@@ -36,12 +36,22 @@ class AnalyticsService:
             return False
         if role == 'admin':
             return True
-        return g.teacher_id == teacher_id
+        return self.group_repo.teacher_has_group(teacher_id, group_id)
 
-    def get_group_stat(self, group_id: int, teacher_id: int, role: str) -> dict:
+    def _ensure_teacher_course(self, course_id: int, teacher_id: int, role: str) -> bool:
+        if role == 'admin':
+            return True
+        c = Course.query.get(int(course_id))
+        return bool(c and int(c.teacher_id) == int(teacher_id))
+
+    def get_group_stat(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
+            raise PermissionError('Нет доступа к предмету')
         sessions = self.session_repo.find_by_group(group_id)
+        if course_id:
+            sessions = [s for s in sessions if int(getattr(s, 'course_id', 0) or 0) == int(course_id)]
         question_stats = defaultdict(lambda: {'scores': [], 'graded': 0, 'correct': 0})
         for sess in sessions:
             for ans in self.answer_repo.find_by_session(sess.id):
@@ -104,11 +114,15 @@ class AnalyticsService:
             'student_cards': student_cards,
         }
 
-    def get_group_students_metrics(self, group_id: int, teacher_id: int, role: str) -> dict:
+    def get_group_students_metrics(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
+            raise PermissionError('Нет доступа к предмету')
         sessions = self.session_repo.find_by_group(group_id)
-        session_ids, _, answers_by = build_group_answers_index(group_id)
+        if course_id:
+            sessions = [s for s in sessions if int(getattr(s, 'course_id', 0) or 0) == int(course_id)]
+        session_ids, _, answers_by = build_group_answers_index(group_id, int(course_id) if course_id else None)
         students = self.user_repo.find_by_group(group_id)
         students.sort(key=lambda u: (u.full_name or u.login or '').lower())
         rows = []
@@ -164,11 +178,13 @@ class AnalyticsService:
             'timeline': timeline,
         }
 
-    def run_clustering(self, group_id: int, teacher_id: int, role: str) -> dict:
+    def run_clustering(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
+            raise PermissionError('Нет доступа к предмету')
         students = self.user_repo.find_by_group(group_id)
-        payload = cluster_payload_for_group(group_id, students)
+        payload = cluster_payload_for_group(group_id, students, course_id=int(course_id) if course_id else None)
         run = self.cluster_repo.create_run(
             group_id,
             payload['n_clusters'],

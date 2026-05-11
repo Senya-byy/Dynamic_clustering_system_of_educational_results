@@ -129,6 +129,7 @@ class Session(db.Model):
     question_pool_json = db.Column(db.Text, nullable=True)  # JSON list id вопросов
     # Статический PIN для ручного входа (без QR); выдаётся только преподавателю в live-qr.
     join_pin = db.Column(db.String(12), nullable=True)
+    frozen_qr_nonce = db.Column(db.String(128), nullable=True)
 
 
 class SessionGroup(db.Model):

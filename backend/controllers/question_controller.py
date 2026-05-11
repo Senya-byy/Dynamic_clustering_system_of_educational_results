@@ -36,9 +36,14 @@ def create_question(current_user):
     data["text"] = get_trimmed_nonblank_str(
         data, "text", required=True, max_len=20_000
     )
-    data["correct_answer"] = get_trimmed_nonblank_str(
-        data, "correct_answer", required=True, max_len=20_000
-    )
+    # Optional grading criteria / comment.
+    correct = get_str(data, "correct_answer", required=False, max_len=20_000, strip=False)
+    if correct is not None:
+        correct = str(correct).strip()
+    if correct:
+        data["correct_answer"] = correct
+    else:
+        data.pop("correct_answer", None)
     get_int(data, "max_score", required=True, min_value=1, max_value=10_000)
 
     raw_diff = data.get("difficulty")
@@ -65,8 +70,10 @@ def create_question(current_user):
     else:
         data.pop("topic", None)
 
+    # Topic is optional (simplified UX).
     if not topic_id and not topic_free:
-        raise ValueError("Укажите тему из каталога или краткое название темы (поле «Тема (текст)»)")
+        data.pop("topic_id", None)
+        data.pop("topic", None)
 
     data["created_by"] = current_user["id"]
     data["course_id"] = int(c.id)
@@ -158,9 +165,12 @@ def update_question(current_user, qid):
             _assert_topic_access(topic_id, current_user)
             data["topic_id"] = topic_id
     if "correct_answer" in data:
-        data["correct_answer"] = get_trimmed_nonblank_str(
-            data, "correct_answer", required=True, max_len=20_000
-        )
+        raw = get_str(data, "correct_answer", required=False, max_len=20_000, strip=False)
+        if raw is None:
+            data["correct_answer"] = None
+        else:
+            s = str(raw).strip()
+            data["correct_answer"] = s if s else None
     q = question_service.update_question(int(qid), data or {})
     return jsonify(q), 200
 

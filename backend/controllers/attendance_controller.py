@@ -4,12 +4,14 @@ from services.answer_service import AnswerService
 from repositories.session_repository import SessionRepository
 from repositories.user_repository import UserRepository
 from repositories.group_repository import GroupRepository
+from repositories.course_repository import CourseRepository
 from middleware.auth_middleware import token_required, role_required
 from models import Group, Attendance
 
 session_repo = SessionRepository()
 user_repo = UserRepository()
 group_repo = GroupRepository()
+course_repo = CourseRepository()
 answer_service = AnswerService()
 
 
@@ -19,14 +21,19 @@ def get_group_stats(current_user):
     group_id = request.args.get('group_id', type=int)
     if not group_id:
         return jsonify({'error': 'group_id required'}), 400
+    course_id = request.args.get('course_id', type=int)
+    if not course_id:
+        return jsonify({'error': 'course_id required'}), 400
     group = Group.query.get(group_id)
     if not group:
         return jsonify({'error': 'not found'}), 404
-    if group.teacher_id != current_user['id'] and current_user['role'] != 'admin':
-        return jsonify({'error': 'access denied'}), 403
+    if current_user['role'] != 'admin':
+        c = course_repo.find_by_id(int(course_id))
+        if not c or int(c.teacher_id) != int(current_user['id']):
+            return jsonify({'error': 'access denied'}), 403
 
     students = user_repo.find_by_group(group_id)
-    sessions = session_repo.find_by_group(group_id)
+    sessions = [s for s in session_repo.find_by_group(group_id) if int(getattr(s, 'course_id', 0) or 0) == int(course_id)]
     stats = []
     for student in students:
         answers = answer_service.get_student_answers_with_feedback(student.id)

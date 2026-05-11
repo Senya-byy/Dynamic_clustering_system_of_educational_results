@@ -29,15 +29,9 @@
         <option v-for="q in questions" :key="q.id" :value="q.id">{{ q.text.slice(0, 72) }}…</option>
       </select>
 
-      <label class="ui-label">Пул по темам каталога</label>
-      <p class="page-lead" style="margin: 0 0 0.5rem; font-size: 0.9rem">
-        Либо один вопрос выше, либо несколько тем — студентам выдаются вопросы из пула.
+      <p class="ui-meta" style="margin: 0.25rem 0 0.75rem">
+        Поддерживается только один фиксированный вопрос на сессию.
       </p>
-      <select v-model="poolTopicIds" multiple class="ui-select ui-select--multi">
-        <option v-for="t in topics" :key="'tp' + t.id" :value="t.id">
-          {{ t.name }} ({{ questionCountByTopic[t.id] || 0 }} вопр.)
-        </option>
-      </select>
 
       <label class="ui-label">Таймер (сек), опционально</label>
       <input v-model="timerSeconds" class="ui-input" type="number" min="0" placeholder="300" />
@@ -67,7 +61,9 @@
         <p class="mono" style="margin: 0">Пароль: <strong>{{ joinPin || '—' }}</strong></p>
         <p class="ui-meta" style="margin: 0.5rem 0 0; font-size: 0.82rem">На одной паре с одного телефона — один аккаунт студента.</p>
       </div>
-      <button type="button" class="ui-btn ui-btn--secondary" @click="stopLive">Остановить обновление</button>
+      <button type="button" class="ui-btn ui-btn--secondary" @click="freezeQr">
+        Остановить обновление (QR останется действительным)
+      </button>
     </div>
 
     <div class="ui-card">
@@ -147,20 +143,8 @@ const courseGroups = ref([])
 const questions = ref([])
 const topics = ref([])
 
-const questionCountByTopic = computed(() => {
-  const m = {}
-  for (const q of questions.value) {
-    const tid = q.topic_id
-    if (tid != null) {
-      m[tid] = (m[tid] || 0) + 1
-    }
-  }
-  return m
-})
-
 const selectedGroupIds = ref([])
 const selectedQuestionId = ref('')
-const poolTopicIds = ref([])
 const timerSeconds = ref('')
 const liveQr = ref('')
 const sessionCode = ref('')
@@ -270,13 +254,10 @@ const startSession = async () => {
     alert('Выберите хотя бы одну группу')
     return
   }
-  const tpool = poolTopicIds.value.map((x) => parseInt(x, 10)).filter(Boolean)
-  if (tpool.length) {
-    body.topic_ids = tpool
-  } else if (selectedQuestionId.value) {
+  if (selectedQuestionId.value) {
     body.question_id = parseInt(selectedQuestionId.value, 10)
   } else {
-    alert('Выберите один вопрос или одну/несколько тем для пула')
+    alert('Выберите один вопрос')
     return
   }
   try {
@@ -295,7 +276,6 @@ const startSession = async () => {
 
 const onCourseChange = async () => {
   selectedGroupIds.value = []
-  poolTopicIds.value = []
   selectedQuestionId.value = ''
   await fetchCourseGroups()
   await fetchQuestions()
@@ -316,6 +296,24 @@ const stopLive = () => {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+}
+
+const freezeQr = async () => {
+  if (!activeSessionId.value) return
+  try {
+    const res = await api.post(`/sessions/${activeSessionId.value}/freeze-qr`, null, {
+      params: { port: frontendDevPort() },
+      headers: { 'X-Frontend-Origin': resolveQrOrigin() },
+    })
+    liveQr.value = res.data.qr_code
+    sessionCode.value = res.data.code
+    if (res.data.join_pin) {
+      joinPin.value = res.data.join_pin
+    }
+    stopLive()
+  } catch (e) {
+    alert(e.response?.data?.error || 'Не удалось заморозить QR')
   }
 }
 

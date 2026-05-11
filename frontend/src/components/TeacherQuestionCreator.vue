@@ -52,8 +52,7 @@
         v-model="newQuestion.correct_answer"
         class="ui-textarea"
         rows="4"
-        required
-        placeholder="Как оценивать ответ"
+        placeholder="Критерии оценки (необязательно)"
       />
       <div class="ui-actions">
         <button type="button" class="ui-btn ui-btn--ghost" @click="loadRecommendations">Подсказки</button>
@@ -198,23 +197,14 @@ const createQuestion = async () => {
   }
   const q = newQuestion.value
   const text = (q.text || '').trim()
-  const crit = (q.correct_answer || '').trim()
   const topicTxt = (q.topic || '').trim()
   const maxS = Number(q.max_score)
   if (!text) {
     alert('Введите формулировку вопроса')
     return
   }
-  if (!crit) {
-    alert('Заполните эталон / критерии оценки')
-    return
-  }
   if (!Number.isFinite(maxS) || maxS < 1 || maxS > 10000) {
     alert('Максимум баллов — целое число от 1 до 10000')
-    return
-  }
-  if (!q.topic_id && !topicTxt) {
-    alert('Выберите тему из каталога или введите краткое название темы')
     return
   }
   const body = {
@@ -224,10 +214,11 @@ const createQuestion = async () => {
     topic_id: q.topic_id || undefined,
     difficulty: q.difficulty,
     max_score: maxS,
-    correct_answer: crit
+    correct_answer: (q.correct_answer || '').trim() || undefined
   }
   if (!body.topic_id) delete body.topic_id
   if (!body.topic) delete body.topic
+  if (!body.correct_answer) delete body.correct_answer
   try {
     await api.post('/questions', body)
     newQuestion.value = {
@@ -268,14 +259,9 @@ const editQuestion = (q) => {
 const updateQuestion = async () => {
   const f = editForm.value
   const text = (f.text || '').trim()
-  const crit = (f.correct_answer || '').trim()
   const maxS = Number(f.max_score)
   if (!text) {
     alert('Текст вопроса не может быть пустым')
-    return
-  }
-  if (!crit) {
-    alert('Эталон / критерии не могут быть пустыми')
     return
   }
   if (!Number.isFinite(maxS) || maxS < 1 || maxS > 10000) {
@@ -285,7 +271,7 @@ const updateQuestion = async () => {
   const topicTxt = (f.topic || '').trim()
   const payload = {
     text,
-    correct_answer: crit,
+    correct_answer: (f.correct_answer || '').trim() || null,
     max_score: maxS,
     difficulty: f.difficulty,
     topic_id: f.topic_id != null && f.topic_id !== '' ? Number(f.topic_id) : null

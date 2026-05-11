@@ -14,35 +14,6 @@ course_repo = CourseRepository()
 question_repo = QuestionRepository()
 
 
-def _topic_ids_from_payload(payload: dict) -> list:
-    ids: list[int] = []
-    raw_single = payload.get("topic_id")
-    if raw_single is not None and raw_single != "":
-        try:
-            ids.append(int(raw_single))
-        except (TypeError, ValueError):
-            raise ValueError("topic_id должен быть целым числом")
-
-    raw_list = payload.get("topic_ids")
-    if raw_list is not None and not isinstance(raw_list, list):
-        raise ValueError("topic_ids должен быть списком")
-    if isinstance(raw_list, list):
-        for x in raw_list:
-            if x is None or x == "":
-                continue
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                raise ValueError("topic_ids должен содержать только целые числа")
-    seen = set()
-    out = []
-    for i in ids:
-        if i not in seen:
-            seen.add(i)
-            out.append(i)
-    return out
-
-
 @token_required
 @role_required(['teacher', 'admin'])
 def create_session(current_user):
@@ -91,30 +62,24 @@ def create_session(current_user):
         if allowed_course_groups and int(gid) not in allowed_course_groups:
             return jsonify({'error': 'Группа не привязана к выбранному предмету'}), 400
 
-    topic_ids = _topic_ids_from_payload(data)
-    if topic_ids:
-        if data.get('question_ids'):
-            return jsonify({'error': 'Нельзя одновременно передавать topic_ids и question_ids'}), 400
-        if not c:
-            return jsonify({'error': 'course_id required when using topic_ids'}), 400
-        data['question_ids'] = session_service.question_ids_from_topic_ids(topic_ids, int(c.id))
-    data.pop('topic_id', None)
-    data.pop('topic_ids', None)
-
-    if not data.get('question_id') and not data.get('question_ids'):
-        return jsonify(
-            {
-                'error': 'Нужен один вопрос (question_id), пул по темам (topic_ids) или явный список question_ids'
-            }
-        ), 400
+    # Simplified UX: only one fixed question per session.
+    if data.get('topic_id') or data.get('topic_ids') or data.get('question_ids'):
+        return jsonify({'error': 'Пулы и темы отключены. Передайте только question_id.'}), 400
+    qid = get_int(data, 'question_id', required=True, min_value=1)
 
     # Backward compatible: infer course_id from question_id for legacy clients/tests.
-    if not c and data.get('question_id'):
-        qrow = question_repo.find_by_id(int(data['question_id']))
+    qrow = question_repo.find_by_id(int(qid))
+    if not qrow:
+        return jsonify({'error': 'Вопрос не найден'}), 404
+    if not c and qrow and getattr(qrow, 'course_id', None):
+        c = course_repo.find_by_id(int(qrow.course_id))
         if qrow and getattr(qrow, 'course_id', None):
             c = course_repo.find_by_id(int(qrow.course_id))
             if c and current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
                 return jsonify({'error': 'Нет доступа к предмету'}), 403
+    # Ensure question belongs to chosen course.
+    if c and getattr(qrow, 'course_id', None) and int(qrow.course_id) != int(c.id):
+        return jsonify({'error': 'Вопрос не из выбранного предмета'}), 400
 
     data['group_ids'] = group_ids
     if c:
@@ -128,8 +93,6 @@ def create_session(current_user):
         if raw_title is not None:
             get_str(data, "title", required=False, max_len=250, strip=False)
 
-    if data.get('question_ids'):
-        data.pop('question_id', None)
     sess = session_service.create_session(data)
     return jsonify(sess), 201
 
@@ -158,6 +121,29 @@ def get_live_qr(current_user, sid):
         if not base:
             base = (request.host_url or '').rstrip('/')
         out = session_service.issue_live_qr(
+            int(sid), current_user['id'], base.rstrip('/')
+        )
+        return jsonify(out), 200
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@token_required
+@role_required(['teacher', 'admin'])
+def freeze_live_qr(current_user, sid):
+    fp = request.args.get('port', type=int)
+    default_port = fp if fp and 1 <= fp <= 65535 else 5173
+    try:
+        base = resolve_public_frontend_base(
+            request.headers.get('X-Frontend-Origin'),
+            request.headers.get('Referer'),
+            default_port=default_port,
+        )
+        if not base:
+            base = (request.host_url or '').rstrip('/')
+        out = session_service.freeze_live_qr(
             int(sid), current_user['id'], base.rstrip('/')
         )
         return jsonify(out), 200

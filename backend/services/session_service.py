@@ -25,6 +25,7 @@ from urllib.parse import quote
 
 # Билет по QR: несколько студентов могут пройти verify по одному nonce, пока не истёк срок.
 JOIN_TICKET_TTL_SECONDS = 5.0
+FROZEN_JOIN_TICKET_TTL_SECONDS = 24 * 60 * 60.0
 
 
 class SessionService:
@@ -192,8 +193,18 @@ class SessionService:
                 raise PermissionError('Нет доступа к сессии')
 
         self.session_repo.purge_expired_tickets()
-        nonce = secrets.token_urlsafe(24)
-        self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=JOIN_TICKET_TTL_SECONDS)
+        # If QR is frozen, reuse the stored nonce and keep it valid.
+        nonce = getattr(sess, 'frozen_qr_nonce', None)
+        if nonce:
+            # Ensure a valid ticket exists with long TTL.
+            try:
+                self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=FROZEN_JOIN_TICKET_TTL_SECONDS)
+            except Exception:
+                # nonce might already exist; ignore.
+                pass
+        else:
+            nonce = secrets.token_urlsafe(24)
+            self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=JOIN_TICKET_TTL_SECONDS)
         base = base_url.rstrip('/')
         join_path = f"{base}/join?code={quote(sess.code)}&nonce={quote(nonce)}"
         qr_base64 = generate_qr_base64(join_path)
@@ -203,9 +214,66 @@ class SessionService:
             'code': sess.code,
             'join_pin': getattr(sess, 'join_pin', None) or '',
             'nonce': nonce,
-            'expires_in_seconds': int(JOIN_TICKET_TTL_SECONDS),
+            'expires_in_seconds': int(FROZEN_JOIN_TICKET_TTL_SECONDS if getattr(sess, 'frozen_qr_nonce', None) else JOIN_TICKET_TTL_SECONDS),
             'join_url': join_path,
             'qr_code': qr_base64,
+        }
+
+    def freeze_live_qr(self, session_id: int, teacher_id: int, base_url: str) -> Dict:
+        """Stops rotating nonces; last QR remains valid until session is closed."""
+        sess = self.session_repo.find_by_id(session_id)
+        if not sess or not sess.is_active:
+            raise ValueError('Сессия не найдена или закрыта')
+        u = self.user_repo.find_by_id(teacher_id)
+        is_admin = u and u.role == 'admin'
+        if not is_admin:
+            gids = self.session_repo.list_group_ids(sess.id) or [int(sess.group_id)]
+            gids_int = [int(x) for x in gids]
+            ok = (
+                TeacherGroup.query.filter(
+                    TeacherGroup.teacher_id == int(teacher_id),
+                    TeacherGroup.group_id.in_(gids_int),
+                )
+                .limit(1)
+                .count()
+                > 0
+            ) or (
+                Group.query.filter(
+                    Group.id.in_(gids_int),
+                    Group.teacher_id == int(teacher_id),
+                )
+                .limit(1)
+                .count()
+                > 0
+            )
+            if not ok:
+                raise PermissionError('Нет доступа к сессии')
+
+        # If already frozen, just re-issue QR.
+        nonce = getattr(sess, 'frozen_qr_nonce', None)
+        if not nonce:
+            nonce = secrets.token_urlsafe(24)
+            row = SessionORM.query.get(session_id)
+            if row:
+                row.frozen_qr_nonce = nonce
+                db.session.commit()
+            sess = self.session_repo.find_by_id(session_id)
+
+        self.session_repo.purge_expired_tickets()
+        self.session_repo.create_join_ticket(sess.id, nonce, ttl_seconds=FROZEN_JOIN_TICKET_TTL_SECONDS)
+        base = base_url.rstrip('/')
+        join_path = f"{base}/join?code={quote(sess.code)}&nonce={quote(nonce)}"
+        qr_base64 = generate_qr_base64(join_path)
+        self.session_repo.update_qr(sess.id, qr_base64)
+        return {
+            'session_id': sess.id,
+            'code': sess.code,
+            'join_pin': getattr(sess, 'join_pin', None) or '',
+            'nonce': nonce,
+            'expires_in_seconds': int(FROZEN_JOIN_TICKET_TTL_SECONDS),
+            'join_url': join_path,
+            'qr_code': qr_base64,
+            'is_frozen': True,
         }
 
     def _finalize_student_session_join(
@@ -344,6 +412,7 @@ class SessionService:
                 'is_active': s.is_active,
                 'start_time': s.start_time.isoformat(),
                 'group_id': s.group_id,
+                'course_id': getattr(s, 'course_id', None),
                 'question_id': s.question_id,
             }
             for s in sessions

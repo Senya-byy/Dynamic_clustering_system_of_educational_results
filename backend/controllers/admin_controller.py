@@ -93,6 +93,18 @@ def admin_patch_group_status(current_user, gid):
         return jsonify({'error': str(e)}), 400
 
 
+@token_required
+@role_required(['admin'])
+def admin_password_reset(current_user):
+    data = require_json(request)
+    login = get_str(data, "login", required=True, min_len=1, max_len=80)
+    try:
+        row = admin_service.reset_password_by_login(login)
+        return jsonify(row), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 def bootstrap_admin():
     """
     One-time admin bootstrap for hosted environments without shell access.

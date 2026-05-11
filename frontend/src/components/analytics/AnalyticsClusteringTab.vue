@@ -5,6 +5,15 @@
     </div>
     <div v-else class="ui-card">
       <h3 style="margin-top: 0">Кластеризация (k-means)</h3>
+      <div class="ui-row" style="margin: 0.5rem 0 0.25rem">
+        <div class="ui-grow">
+          <label class="ui-label">Предмет</label>
+          <select v-model.number="selectedCourseId" class="ui-select" @change="loadLatest">
+            <option disabled :value="0">Выберите предмет</option>
+            <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </div>
+      </div>
       <div class="cluster-actions">
         <button type="button" class="ui-btn" :disabled="busy" @click="run">
           {{ busy ? 'Считаем…' : 'Запустить кластеризацию' }}
@@ -57,6 +66,16 @@ const busy = ref(false)
 const err = ref('')
 const posted = ref(null)
 const loaded = ref(null)
+const courses = ref([])
+const selectedCourseId = ref(0)
+
+const fetchCourses = async () => {
+  const res = await api.get('/courses')
+  courses.value = res.data || []
+  if (!selectedCourseId.value && courses.value.length) {
+    selectedCourseId.value = courses.value[0].id
+  }
+}
 
 const display = computed(() => {
   if (posted.value && Number(posted.value.gid) === Number(props.groupId)) {
@@ -71,7 +90,9 @@ const loadLatest = async () => {
     return
   }
   try {
-    const tr = await api.get(`/analytics/cluster/${props.groupId}/transitions`)
+    const tr = await api.get(`/analytics/cluster/${props.groupId}/transitions`, {
+      params: selectedCourseId.value ? { course_id: selectedCourseId.value } : {},
+    })
     const det = tr.data?.latest_run_detail
     if (!det?.clusters?.length) {
       loaded.value = null
@@ -98,7 +119,11 @@ const run = async () => {
   err.value = ''
   busy.value = true
   try {
-    const res = await api.post(`/analytics/cluster/${props.groupId}`)
+    const res = await api.post(
+      `/analytics/cluster/${props.groupId}`,
+      null,
+      { params: selectedCourseId.value ? { course_id: selectedCourseId.value } : {} }
+    )
     posted.value = {
       gid: Number(props.groupId),
       payload: {
@@ -134,6 +159,8 @@ watch(
     loadLatest()
   }
 )
+
+fetchCourses()
 </script>
 
 <style scoped>

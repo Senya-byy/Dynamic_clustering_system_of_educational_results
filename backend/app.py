@@ -120,6 +120,25 @@ def _ensure_sessions_join_pin_column():
         conn.execute(text('ALTER TABLE sessions ADD COLUMN join_pin VARCHAR(12)'))
 
 
+def _ensure_sessions_frozen_qr_nonce_column():
+    """Добавляет frozen_qr_nonce для любого движка, если колонки ещё нет."""
+    import logging
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+    insp = inspect(db.engine)
+    if 'sessions' not in insp.get_table_names():
+        return
+    scols = {c['name'] for c in insp.get_columns('sessions')}
+    if 'frozen_qr_nonce' in scols:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text('ALTER TABLE sessions ADD COLUMN frozen_qr_nonce VARCHAR(128)'))
+    except Exception as e:
+        log.warning('Не удалось добавить sessions.frozen_qr_nonce: %s', e)
+
+
 def _ensure_groups_unique_name_index():
     """Уникальность названия группы (create_all не добавляет индекс к уже существующей таблице)."""
     import logging
@@ -299,6 +318,7 @@ def create_app():
             db.create_all()
             _ensure_sqlite_migrations()
             _ensure_sessions_join_pin_column()
+            _ensure_sessions_frozen_qr_nonce_column()
             _ensure_groups_unique_name_index()
             _ensure_groups_status_column()
             _ensure_courses_schema()
@@ -313,6 +333,7 @@ def create_app():
                     db.create_all()
                     _ensure_sqlite_migrations()
                     _ensure_sessions_join_pin_column()
+                    _ensure_sessions_frozen_qr_nonce_column()
                     _ensure_groups_unique_name_index()
                     _ensure_groups_status_column()
                     _ensure_courses_schema()
@@ -335,6 +356,7 @@ def create_app():
         create_session,
         get_session_by_code,
         get_live_qr,
+        freeze_live_qr,
         verify_join_ticket,
         verify_session_pin,
         list_teacher_sessions,
@@ -386,6 +408,7 @@ def create_app():
         admin_delete_user,
         admin_delete_group,
         admin_patch_group_status,
+        admin_password_reset,
         bootstrap_admin,
     )
 
@@ -414,6 +437,7 @@ def create_app():
         methods=['PATCH'],
     )
     app.add_url_rule('/api/admin/teachers', view_func=admin_list_teachers, methods=['GET'])
+    app.add_url_rule('/api/admin/password-reset', view_func=admin_password_reset, methods=['POST'])
     app.add_url_rule('/api/admin/bootstrap', view_func=bootstrap_admin, methods=['POST'])
 
     app.add_url_rule('/api/topics', view_func=list_topics, methods=['GET'])
@@ -470,6 +494,11 @@ def create_app():
         '/api/sessions/<int:sid>/live-qr',
         view_func=get_live_qr,
         methods=['GET'],
+    )
+    app.add_url_rule(
+        '/api/sessions/<int:sid>/freeze-qr',
+        view_func=freeze_live_qr,
+        methods=['POST'],
     )
     app.add_url_rule(
         '/api/sessions/<int:sid>/close',

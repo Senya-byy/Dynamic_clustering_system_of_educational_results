@@ -16,6 +16,7 @@ from models import (
 from datetime import datetime, timedelta
 
 from utils.session_display import format_session_default_title
+
 import secrets
 import string
 import json
@@ -42,15 +43,8 @@ class SessionRepository:
     @staticmethod
     def create(data: dict) -> Session:
         data = dict(data)
-        pool = data.pop('question_ids', None)
-        qpool_json = None
-        if pool and isinstance(pool, list) and len(pool) > 0:
-            qpool_json = json.dumps([int(x) for x in pool])
-            data['question_id'] = random.choice([int(x) for x in pool])
         data['code'] = SessionRepository.generate_unique_code()
         data['join_pin'] = SessionRepository._generate_join_pin()
-        if qpool_json:
-            data['question_pool_json'] = qpool_json
         allowed = {
             'code',
             'join_pin',

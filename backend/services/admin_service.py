@@ -153,6 +153,23 @@ class AdminService:
             "group_id": u.group_id,
         }
 
+    def reset_password_by_login(self, login: str) -> dict:
+        ln = (login or "").strip().lower()
+        if not ln:
+            raise ValueError("Укажите логин")
+        u = self.users.find_by_login(ln)
+        if not u:
+            raise ValueError("Пользователь не найден")
+        if u.role == "admin":
+            raise ValueError("Нельзя сбросить пароль администратора")
+        # 12 chars, no ambiguous symbols.
+        import secrets
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+        temp = "".join(secrets.choice(alphabet) for _ in range(12))
+        u.set_password(temp)
+        db.session.commit()
+        return {"login": u.login, "temporary_password": temp, "user_id": u.id, "role": u.role}
+
     def delete_teacher_own_group(self, teacher_id: int, group_id: int) -> bool:
         u = self.users.find_by_id(teacher_id)
         if not u or u.role != 'teacher':

@@ -5,7 +5,7 @@ from repositories.session_repository import SessionRepository
 from repositories.user_repository import UserRepository
 from repositories.assignment_repository import AssignmentRepository
 from repositories.device_binding_repository import DeviceBindingRepository
-from models import Group, Question, Topic
+from models import Course, Question, Topic
 from utils.device_key import normalize_device_key
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -96,14 +96,24 @@ class AnswerService:
         sess = self.session_repo.find_by_id(session_id)
         if not sess:
             return []
-        group = Group.query.get(sess.group_id)
         u = self.user_repo.find_by_id(teacher_id)
         is_admin = u and u.role == 'admin'
-        if not group or (group.teacher_id != teacher_id and not is_admin):
-            raise PermissionError('Нет доступа к этой сессии')
+        if not is_admin:
+            cid = getattr(sess, 'course_id', None)
+            if cid:
+                c = Course.query.get(int(cid))
+                if not c or int(c.teacher_id) != int(teacher_id):
+                    raise PermissionError('Нет доступа к этой сессии')
+            else:
+                # Backward compatible: legacy sessions without course_id are visible to their creator.
+                if int(getattr(sess, 'created_by', 0) or 0) != int(teacher_id):
+                    raise PermissionError('Нет доступа к этой сессии')
         answers = self.answer_repo.find_by_session(session_id)
         result = []
         for a in answers:
+            # Safety invariant: answer must belong to this session.
+            if int(a.session_id) != int(session_id):
+                continue
             student = self.user_repo.find_by_id(a.student_id)
             qid = getattr(a, 'question_id', None) or sess.question_id
             q = Question.query.get(qid) if qid else None

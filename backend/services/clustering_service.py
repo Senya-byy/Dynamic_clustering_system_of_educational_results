@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from models import Answer, Attendance, Question, Session, User
+from models import Answer, Attendance, Question, Session, SessionGroup, User
 
 
 def _standard_scale(X: np.ndarray) -> np.ndarray:
@@ -182,16 +182,25 @@ def _above_half_max(ans: Answer, q: Question | None) -> bool:
 
 def build_group_answers_index(
     group_id: int,
+    course_id: int | None = None,
 ) -> Tuple[set[int], dict[int, Session], dict[int, List[Answer]]]:
     """session_ids, кэш сессий группы, ответы по student_id."""
-    sessions = Session.query.filter_by(group_id=group_id).all()
+    q = (
+        Session.query.join(SessionGroup, SessionGroup.session_id == Session.id)
+        .filter(SessionGroup.group_id == int(group_id))
+    )
+    if course_id:
+        q = q.filter(Session.course_id == int(course_id))
+    sessions = q.all()
     session_ids = {s.id for s in sessions}
     sess_by_id = {s.id: s for s in sessions}
     if not session_ids:
         return session_ids, sess_by_id, {}
     rows = (
         Answer.query.join(Session, Answer.session_id == Session.id)
-        .filter(Session.group_id == group_id)
+        .join(SessionGroup, SessionGroup.session_id == Session.id)
+        .filter(SessionGroup.group_id == int(group_id))
+        .filter(Session.id.in_(session_ids))
         .all()
     )
     by_student: dict[int, List[Answer]] = defaultdict(list)
@@ -224,9 +233,13 @@ def _late_session_count(
     return len(late_sessions)
 
 
-def build_feature_matrix(group_id: int, student_ids: List[int]) -> List[List[float]]:
+def build_feature_matrix(
+    group_id: int, student_ids: List[int], course_id: int | None = None
+) -> List[List[float]]:
     """Вектор признаков на студента (порядок = FEATURE_KEYS)."""
-    session_ids, sess_by_id, answers_by = build_group_answers_index(group_id)
+    session_ids, sess_by_id, answers_by = build_group_answers_index(
+        group_id, course_id=course_id
+    )
     n_feat = len(FEATURE_KEYS)
     raw_rows: List[List[float]] = []
 
@@ -370,6 +383,7 @@ def _choose_k(X_scaled: np.ndarray, n_samples: int) -> int:
 def cluster_payload_for_group(
     group_id: int,
     students: List[User],
+    course_id: int | None = None,
 ) -> Dict[str, Any]:
     """
     Выполняет кластеризацию без сохранения в БД.
@@ -380,7 +394,7 @@ def cluster_payload_for_group(
     if n < 3:
         raise ValueError('Для кластеризации нужно не менее 3 студентов в группе')
 
-    raw_rows = build_feature_matrix(group_id, student_ids)
+    raw_rows = build_feature_matrix(group_id, student_ids, course_id=course_id)
     X = np.asarray(raw_rows, dtype=np.float64)
     X_scaled = _standard_scale(X)
     if not np.isfinite(X_scaled).all():

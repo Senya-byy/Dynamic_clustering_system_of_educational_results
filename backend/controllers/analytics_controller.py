@@ -9,9 +9,10 @@ analytics_service = AnalyticsService()
 @token_required
 @role_required(['teacher', 'admin'])
 def get_group_students_metrics(current_user, group_id):
+    course_id = request.args.get('course_id', type=int)
     try:
         data = analytics_service.get_group_students_metrics(
-            int(group_id), current_user['id'], current_user['role']
+            int(group_id), current_user['id'], current_user['role'], course_id=course_id
         )
         return jsonify(data), 200
     except PermissionError as e:
@@ -22,11 +23,12 @@ def get_group_students_metrics(current_user, group_id):
 @role_required(['teacher', 'admin'])
 def get_group_stat(current_user):
     gid = request.args.get('group_id', type=int)
+    course_id = request.args.get('course_id', type=int)
     if not gid:
         return jsonify({'error': 'group_id required'}), 400
     try:
         data = analytics_service.get_group_stat(
-            gid, current_user['id'], current_user['role']
+            gid, current_user['id'], current_user['role'], course_id=course_id
         )
         return jsonify(data), 200
     except PermissionError as e:
@@ -49,9 +51,10 @@ def get_student_stat(current_user, student_id):
 @token_required
 @role_required(['teacher', 'admin'])
 def post_cluster_run(current_user, group_id):
+    course_id = request.args.get('course_id', type=int)
     try:
         data = analytics_service.run_clustering(
-            int(group_id), current_user['id'], current_user['role']
+            int(group_id), current_user['id'], current_user['role'], course_id=course_id
         )
         return jsonify(data), 201
     except PermissionError as e:

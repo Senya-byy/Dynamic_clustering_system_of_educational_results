@@ -91,6 +91,27 @@
     </section>
 
     <section class="ui-card">
+      <h2>Сброс пароля</h2>
+      <p class="page-lead">Введите логин пользователя (student/teacher). Система выдаст временный пароль.</p>
+      <form class="ui-row" @submit.prevent="resetPassword">
+        <div class="ui-grow">
+          <label class="ui-label">Логин</label>
+          <input v-model="resetLogin" class="ui-input" required autocomplete="off" />
+        </div>
+        <button type="submit" class="ui-btn ui-btn--secondary">Сбросить</button>
+      </form>
+      <p v-if="msg.reset" class="ui-alert" :class="msg.reset.ok ? 'ui-alert--ok' : 'ui-alert--error'">
+        {{ msg.reset.text }}
+      </p>
+      <div v-if="resetResult" class="ui-card ui-card--muted" style="margin-top: 0.75rem">
+        <p class="ui-meta" style="margin: 0">
+          Временный пароль для <strong>{{ resetResult.login }}</strong>:
+          <span class="ui-badge ui-badge--accent" style="margin-left: 0.35rem">{{ resetResult.temporary_password }}</span>
+        </p>
+      </div>
+    </section>
+
+    <section class="ui-card">
       <h2>Новый ученик</h2>
       <form @submit.prevent="createStudent">
         <label class="ui-label">Логин</label>
@@ -176,8 +197,12 @@ const newStudent = ref({ login: '', password: '', full_name: '', group_id: null 
 const msg = reactive({
   group: null,
   teacher: null,
-  student: null
+  student: null,
+  reset: null
 })
+
+const resetLogin = ref('')
+const resetResult = ref(null)
 
 const loadTeachers = async () => {
   const res = await api.get('/admin/teachers')
@@ -328,6 +353,20 @@ const createStudent = async () => {
     await loadUsers()
   } catch (e) {
     msg.student = { ok: false, text: e.response?.data?.error || 'Ошибка' }
+  }
+}
+
+const resetPassword = async () => {
+  msg.reset = null
+  resetResult.value = null
+  const login = resetLogin.value.trim()
+  if (!login) return
+  try {
+    const res = await api.post('/admin/password-reset', { login })
+    resetResult.value = res.data
+    msg.reset = { ok: true, text: 'Пароль сброшен. Скопируйте временный пароль и передайте пользователю.' }
+  } catch (e) {
+    msg.reset = { ok: false, text: e.response?.data?.error || 'Ошибка' }
   }
 }
 
