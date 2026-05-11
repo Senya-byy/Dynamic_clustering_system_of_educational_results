@@ -8,6 +8,10 @@
       <select v-model="groupId" class="ui-select" style="max-width: 400px" @change="onGroupChange">
         <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
+      <p v-if="selectedGroupName" class="pick-summary">
+        <span class="pick-summary__label">Сейчас выбрано</span>
+        <span class="pick-summary__pill">{{ selectedGroupName }}</span>
+      </p>
     </div>
 
     <nav class="analytics-tabs" aria-label="Разделы аналитики">
@@ -29,7 +33,7 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, watch } from 'vue'
+import { ref, provide, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../api'
 
@@ -37,6 +41,12 @@ const router = useRouter()
 const groups = ref([])
 const groupId = ref('')
 const transitionsKey = ref(0)
+
+const selectedGroupName = computed(() => {
+  const id = groupId.value
+  const g = groups.value.find((x) => String(x.id) === String(id))
+  return g?.name || ''
+})
 
 const tabs = [
   { to: '/teacher/analytics/students', label: 'Студенты' },
@@ -99,5 +109,25 @@ watch(groupId, () => bumpTransitions())
   font-weight: 600;
   border-color: var(--accent);
   background: rgba(99, 102, 241, 0.1);
+}
+.pick-summary {
+  margin: 0.65rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pick-summary__label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.pick-summary__pill {
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  background: var(--accent, #6366f1);
+  color: #fff;
 }
 </style>

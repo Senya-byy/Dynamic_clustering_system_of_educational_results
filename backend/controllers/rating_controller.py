@@ -37,6 +37,8 @@ def get_group_rating(current_user):
         c = course_repo.find_by_id(int(course_id))
         if not c:
             return jsonify({'error': 'course not found'}), 404
+        if getattr(c, 'archived', False):
+            return jsonify({'error': 'Предмет в архиве'}), 400
         if role != 'admin' and int(c.teacher_id) != int(current_user['id']) and role != 'student':
             return jsonify({'error': 'access denied'}), 403
 

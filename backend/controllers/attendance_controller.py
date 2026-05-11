@@ -27,10 +27,13 @@ def get_group_stats(current_user):
     group = Group.query.get(group_id)
     if not group:
         return jsonify({'error': 'not found'}), 404
-    if current_user['role'] != 'admin':
-        c = course_repo.find_by_id(int(course_id))
-        if not c or int(c.teacher_id) != int(current_user['id']):
-            return jsonify({'error': 'access denied'}), 403
+    c = course_repo.find_by_id(int(course_id))
+    if not c:
+        return jsonify({'error': 'course not found'}), 404
+    if getattr(c, 'archived', False):
+        return jsonify({'error': 'Предмет в архиве'}), 400
+    if current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
+        return jsonify({'error': 'access denied'}), 403
 
     students = user_repo.find_by_group(group_id)
     sessions = [s for s in session_repo.find_by_group(group_id) if int(getattr(s, 'course_id', 0) or 0) == int(course_id)]

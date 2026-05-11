@@ -17,6 +17,8 @@ def get_group_students_metrics(current_user, group_id):
         return jsonify(data), 200
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @token_required
@@ -33,6 +35,8 @@ def get_group_stat(current_user):
         return jsonify(data), 200
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @token_required

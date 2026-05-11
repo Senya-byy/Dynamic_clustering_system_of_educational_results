@@ -10,6 +10,10 @@
           <select v-model="groupId" class="ui-select" @change="load">
             <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
+          <p v-if="selectedGroupName" class="pick-summary" style="margin-top: 0.65rem">
+            <span class="pick-summary__label">Выбрано</span>
+            <span class="pick-summary__pill">{{ selectedGroupName }}</span>
+          </p>
         </div>
         <button type="button" class="ui-btn ui-btn--secondary" @click="loadCurrent">Сейчас пара?</button>
       </div>
@@ -53,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import api from '../api'
 
 const groups = ref([])
@@ -61,6 +65,12 @@ const groupId = ref('')
 const slots = ref([])
 const currentMsg = ref('')
 const form = ref({ weekday: 0, start_time: '09:00', end_time: '10:30', title: '' })
+
+const selectedGroupName = computed(() => {
+  const id = groupId.value
+  const g = groups.value.find((x) => String(x.id) === String(id))
+  return g?.name || ''
+})
 
 const load = async () => {
   if (!groupId.value) return
@@ -147,6 +157,25 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.pick-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pick-summary__label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.pick-summary__pill {
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  background: var(--accent, #6366f1);
+  color: #fff;
+}
 .ui-list li {
   justify-content: space-between;
 }

@@ -26,6 +26,8 @@ def create_session(current_user):
             return jsonify({'error': 'Предмет не найден'}), 404
         if current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
             return jsonify({'error': 'Нет доступа к предмету'}), 403
+        if getattr(c, 'archived', False):
+            return jsonify({'error': 'Предмет в архиве'}), 400
 
     # Legacy: group_id -> group_ids=[group_id]
     group_ids = data.get("group_ids")
@@ -77,7 +79,8 @@ def create_session(current_user):
             c = course_repo.find_by_id(int(qrow.course_id))
             if c and current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
                 return jsonify({'error': 'Нет доступа к предмету'}), 403
-    # Ensure question belongs to chosen course.
+    if c and getattr(c, 'archived', False):
+        return jsonify({'error': 'Предмет в архиве'}), 400
     if c and getattr(qrow, 'course_id', None) and int(qrow.course_id) != int(c.id):
         return jsonify({'error': 'Вопрос не из выбранного предмета'}), 400
 

@@ -8,6 +8,13 @@ courses = CourseRepository()
 groups = GroupRepository()
 
 
+def _parse_include_archived(default: bool) -> bool:
+    raw = request.args.get("include_archived")
+    if raw is None or raw == "":
+        return default
+    return str(raw).lower() in ("1", "true", "yes", "on")
+
+
 @token_required
 @role_required(["teacher", "admin"])
 def list_courses(current_user):
@@ -16,9 +23,12 @@ def list_courses(current_user):
         tid = request.args.get("teacher_id", type=int)
         if not tid:
             return jsonify({"error": "teacher_id required for admin"}), 400
-        rows = courses.list_for_teacher(tid, include_archived=True)
+        rows = courses.list_for_teacher(tid, include_archived=_parse_include_archived(default=True))
     else:
-        rows = courses.list_for_teacher(current_user["id"], include_archived=True)
+        # По умолчанию без архива (сессии, аналитика, кластеризация). Страница «Предметы»: ?include_archived=1
+        rows = courses.list_for_teacher(
+            current_user["id"], include_archived=_parse_include_archived(default=False)
+        )
     return (
         jsonify(
             [

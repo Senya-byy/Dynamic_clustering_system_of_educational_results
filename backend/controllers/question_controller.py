@@ -22,6 +22,8 @@ def _assert_course_access(course_id: int, current_user: dict) -> Course:
     c = Course.query.get(int(course_id))
     if not c:
         raise ValueError("Предмет не найден")
+    if getattr(c, "archived", False):
+        raise ValueError("Предмет в архиве")
     if current_user["role"] != "admin" and int(c.teacher_id) != int(current_user["id"]):
         raise ValueError("Предмет не из вашего каталога")
     return c

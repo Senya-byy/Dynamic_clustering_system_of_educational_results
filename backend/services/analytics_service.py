@@ -44,9 +44,18 @@ class AnalyticsService:
         c = Course.query.get(int(course_id))
         return bool(c and int(c.teacher_id) == int(teacher_id))
 
+    @staticmethod
+    def _reject_archived_course(course_id: int | None) -> None:
+        if not course_id:
+            return
+        c = Course.query.get(int(course_id))
+        if c and getattr(c, 'archived', False):
+            raise ValueError('Предмет в архиве')
+
     def get_group_stat(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        self._reject_archived_course(course_id)
         if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
             raise PermissionError('Нет доступа к предмету')
         sessions = self.session_repo.find_by_group(group_id)
@@ -117,6 +126,7 @@ class AnalyticsService:
     def get_group_students_metrics(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        self._reject_archived_course(course_id)
         if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
             raise PermissionError('Нет доступа к предмету')
         sessions = self.session_repo.find_by_group(group_id)
@@ -181,6 +191,7 @@ class AnalyticsService:
     def run_clustering(self, group_id: int, teacher_id: int, role: str, course_id: int | None = None) -> dict:
         if not self._ensure_teacher_group(group_id, teacher_id, role):
             raise PermissionError('Нет доступа к группе')
+        self._reject_archived_course(course_id)
         if course_id and not self._ensure_teacher_course(int(course_id), teacher_id, role):
             raise PermissionError('Нет доступа к предмету')
         students = self.user_repo.find_by_group(group_id)
@@ -196,6 +207,8 @@ class AnalyticsService:
                 'label': c['label'],
                 'size': c['size'],
                 'mean_features': c['mean_features'],
+                'student_ids': c.get('student_ids') or [],
+                'student_names': c.get('student_names') or [],
             }
             for c in payload['clusters']
         ]

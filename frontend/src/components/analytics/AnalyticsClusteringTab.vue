@@ -29,8 +29,61 @@
         </p>
         <p v-if="display.summary_ru" class="ui-meta">{{ display.summary_ru }}</p>
 
+        <div class="viz-grid">
+          <div class="viz-card">
+            <h4 class="viz-title">Доли кластеров</h4>
+            <div class="doughnut-wrap">
+              <Doughnut v-if="doughnutData" :data="doughnutData" :options="doughnutOptions" />
+            </div>
+          </div>
+          <div class="viz-card viz-card--grow">
+            <h4 class="viz-title">Средние по признаку</h4>
+            <div v-if="display.feature_keys?.length" class="feature-pick">
+              <label class="ui-label">Признак</label>
+              <select v-model="barFeatureKey" class="ui-select">
+                <option v-for="key in display.feature_keys" :key="key" :value="key">
+                  {{ display.feature_labels[key] || key }}
+                </option>
+              </select>
+            </div>
+            <div class="bar-wrap">
+              <Bar v-if="barData" :data="barData" :options="barOptions" />
+            </div>
+          </div>
+        </div>
+
+        <div class="legend-card">
+          <h4 class="viz-title">Карта: кто в каком кластере</h4>
+          <p class="ui-meta legend-hint">
+            Цвет совпадает с диаграммами. Имена — в том же кластере, что и сегмент кольца / столбец.
+          </p>
+          <div
+            v-for="c in display.cluster_summaries"
+            :key="'leg' + c.label"
+            class="legend-block"
+          >
+            <div class="legend-head">
+              <span class="swatch" :style="{ background: colorFor(c.label) }" />
+              <strong>Кластер {{ c.label }}</strong>
+              <span class="ui-meta">({{ c.size }} чел.)</span>
+            </div>
+            <div v-if="namesFor(c).length" class="name-chips">
+              <span
+                v-for="(name, idx) in namesFor(c)"
+                :key="idx"
+                class="name-chip"
+                :style="{ borderColor: colorFor(c.label), color: colorFor(c.label) }"
+              >
+                {{ name }}
+              </span>
+            </div>
+            <p v-else class="ui-meta">Состав откройте на вкладке «Состав кластеров» для выбранного запуска.</p>
+          </div>
+        </div>
+
         <div v-for="c in display.cluster_summaries" :key="c.label" class="cluster-block">
           <p class="cluster-title">
+            <span class="swatch swatch--inline" :style="{ background: colorFor(c.label) }" />
             Кластер {{ c.label }}
             <span class="ui-meta">({{ c.size }} чел.)</span>
           </p>
@@ -53,7 +106,20 @@
 
 <script setup>
 import { ref, computed, watch, inject } from 'vue'
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+} from 'chart.js'
+import { Doughnut, Bar } from 'vue-chartjs'
 import api from '../../api'
+import { colorForClusterLabel } from '../../utils/clusterColors'
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 const props = defineProps({
   groupId: { type: [String, Number], default: '' },
@@ -68,10 +134,16 @@ const posted = ref(null)
 const loaded = ref(null)
 const courses = ref([])
 const selectedCourseId = ref(0)
+const barFeatureKey = ref('')
+
+const colorFor = (label) => colorForClusterLabel(label)
 
 const fetchCourses = async () => {
   const res = await api.get('/courses')
   courses.value = res.data || []
+  if (selectedCourseId.value && !courses.value.some((c) => c.id === selectedCourseId.value)) {
+    selectedCourseId.value = courses.value.length ? courses.value[0].id : 0
+  }
   if (!selectedCourseId.value && courses.value.length) {
     selectedCourseId.value = courses.value[0].id
   }
@@ -83,6 +155,84 @@ const display = computed(() => {
   }
   return loaded.value
 })
+
+watch(
+  () => display.value?.feature_keys,
+  (keys) => {
+    if (!keys?.length) return
+    if (!keys.includes(barFeatureKey.value)) {
+      barFeatureKey.value = keys[0]
+    }
+  },
+  { immediate: true }
+)
+
+const doughnutData = computed(() => {
+  const d = display.value
+  if (!d?.cluster_summaries?.length) return null
+  const sums = d.cluster_summaries
+  return {
+    labels: sums.map((c) => `Кластер ${c.label}`),
+    datasets: [
+      {
+        data: sums.map((c) => c.size),
+        backgroundColor: sums.map((c) => colorFor(c.label)),
+        borderWidth: 2,
+        borderColor: '#fff',
+      },
+    ],
+  }
+})
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: { usePointStyle: true, padding: 12, font: { size: 12 } },
+    },
+  },
+}
+
+const barData = computed(() => {
+  const d = display.value
+  const key = barFeatureKey.value
+  if (!d?.cluster_summaries?.length || !key) return null
+  const sums = [...d.cluster_summaries].sort((a, b) => Number(a.label) - Number(b.label))
+  return {
+    labels: sums.map((c) => `Кластер ${c.label}`),
+    datasets: [
+      {
+        label: d.feature_labels[key] || key,
+        data: sums.map((c) => Number(c.mean_features[key]) || 0),
+        backgroundColor: sums.map((c) => colorFor(c.label)),
+        borderColor: sums.map((c) => colorFor(c.label)),
+        borderWidth: 1,
+      },
+    ],
+  }
+})
+
+const barOptions = {
+  indexAxis: 'y',
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+  },
+  scales: {
+    x: {
+      beginAtZero: true,
+      grid: { color: 'rgba(0,0,0,0.06)' },
+    },
+    y: {
+      grid: { display: false },
+    },
+  },
+}
+
+const namesFor = (c) => (Array.isArray(c.student_names) ? c.student_names : [])
 
 const loadLatest = async () => {
   if (!props.groupId) {
@@ -105,6 +255,8 @@ const loadLatest = async () => {
         label: c.label,
         size: c.size,
         mean_features: c.mean_features,
+        student_ids: c.student_ids || [],
+        student_names: c.student_names || [],
       })),
       feature_keys: det.feature_keys,
       feature_labels: det.feature_labels,
@@ -178,6 +330,88 @@ fetchCourses()
 .run-meta {
   margin: 0.75rem 0;
   font-size: 0.95rem;
+}
+.viz-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 1rem 0 1.5rem;
+  align-items: stretch;
+}
+.viz-card {
+  background: var(--surface-muted, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  min-width: 220px;
+}
+.viz-card--grow {
+  flex: 1 1 280px;
+  min-height: 260px;
+}
+.viz-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.doughnut-wrap {
+  max-width: 280px;
+  margin: 0 auto;
+}
+.bar-wrap {
+  height: 220px;
+  margin-top: 0.5rem;
+}
+.feature-pick {
+  margin-bottom: 0.5rem;
+}
+.legend-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(16, 185, 129, 0.05));
+}
+.legend-hint {
+  margin: 0 0 1rem;
+}
+.legend-block {
+  margin-bottom: 1rem;
+}
+.legend-block:last-child {
+  margin-bottom: 0;
+}
+.legend-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+.swatch {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.swatch--inline {
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.name-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.name-chip {
+  font-size: 0.82rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 2px solid;
+  background: #fff;
+  font-weight: 600;
 }
 .cluster-block {
   margin-bottom: 1.25rem;

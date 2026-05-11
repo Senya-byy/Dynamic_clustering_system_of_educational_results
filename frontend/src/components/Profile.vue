@@ -43,6 +43,10 @@
         </select>
         <button type="button" class="ui-btn ui-btn--secondary" @click="attachGroup">Привязать</button>
       </div>
+      <p v-if="attachGroupName" class="attach-pill-row">
+        <span class="attach-pill-label">Выбрано для привязки</span>
+        <span class="attach-pill">{{ attachGroupName }}</span>
+      </p>
       <p v-if="groupMsg" class="ui-alert" :class="groupErr ? 'ui-alert--error' : 'ui-alert--ok'">{{ groupMsg }}</p>
     </div>
 
@@ -93,6 +97,12 @@ const groupMsg = ref('')
 const groupErr = ref(false)
 
 const studentGroupName = ref('')
+
+const attachGroupName = computed(() => {
+  if (!attachGroupId.value) return ''
+  const g = allGroups.value.find((x) => Number(x.id) === Number(attachGroupId.value))
+  return g?.name || ''
+})
 
 const fetchProfile = async () => {
   const res = await api.get('/auth/profile')
@@ -248,6 +258,26 @@ onMounted(async () => {
 .profile-groups li {
   justify-content: space-between;
   align-items: center;
+}
+.attach-pill-row {
+  margin: 0.55rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.attach-pill-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.attach-pill {
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  background: var(--accent, #6366f1);
+  color: #fff;
 }
 .ui-btn--small {
   padding: 0.35rem 0.65rem;

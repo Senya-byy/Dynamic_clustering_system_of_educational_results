@@ -19,9 +19,7 @@
       </select>
 
       <label class="ui-label">Группы предмета</label>
-      <select v-model="selectedGroupIds" multiple class="ui-select ui-select--multi" required>
-        <option v-for="g in courseGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
-      </select>
+      <GroupCheckboxList v-model="selectedGroupIds" :options="courseGroups" />
 
       <label class="ui-label">Один вопрос (фиксированный)</label>
       <select v-model="selectedQuestionId" class="ui-select">
@@ -110,6 +108,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '../api'
+import GroupCheckboxList from './GroupCheckboxList.vue'
 
 const isLocalHostPage = computed(() => {
   if (typeof window === 'undefined') return false
@@ -243,7 +242,7 @@ const pollQr = async () => {
 const startSession = async () => {
   const body = {
     course_id: selectedCourseId.value,
-    group_ids: (selectedGroupIds.value || []).map((x) => parseInt(x, 10)).filter(Boolean),
+    group_ids: (selectedGroupIds.value || []).map((x) => Number(x)).filter((n) => n > 0),
     timer_seconds: timerSeconds.value ? parseInt(timerSeconds.value, 10) : null
   }
   if (!body.course_id) {

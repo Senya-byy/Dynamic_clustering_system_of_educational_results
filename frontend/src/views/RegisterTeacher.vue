@@ -50,17 +50,12 @@
           placeholder="Иванов Иван Иванович"
         />
 
-        <label class="ui-label" for="rt-existing-groups">Выберите существующие группы (можно несколько)</label>
-        <select
-          id="rt-existing-groups"
+        <label class="ui-label">Выберите существующие группы (можно несколько)</label>
+        <GroupCheckboxList
           v-model="selectedGroupIds"
-          multiple
-          class="ui-select ui-select--multi"
-        >
-          <option v-for="g in groups" :key="g.id" :value="g.id">
-            {{ g.name }}
-          </option>
-        </select>
+          :options="groups"
+          empty-hint="Отметьте кружком хотя бы одну группу — выбранные появятся сверху списком."
+        />
 
         <div class="ui-actions">
           <button type="submit" class="ui-btn ui-btn--primary" :disabled="loading">
@@ -85,6 +80,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 import { useAuthStore } from '../store/auth'
+import GroupCheckboxList from '../components/GroupCheckboxList.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -104,7 +100,7 @@ const submit = async () => {
     error.value = 'Пароли не совпадают'
     return
   }
-  const gids = (selectedGroupIds.value || []).map((x) => parseInt(x, 10)).filter(Boolean)
+  const gids = (selectedGroupIds.value || []).map((x) => Number(x)).filter((n) => n > 0)
   if (!gids.length) {
     error.value = 'Выберите хотя бы одну группу'
     return

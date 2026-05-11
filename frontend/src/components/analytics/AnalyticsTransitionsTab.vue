@@ -49,7 +49,7 @@
         <h3 style="margin-top: 0">Доля студентов по кластерам (по запускам)</h3>
         <div class="stacked-legend">
           <span v-for="lab in allLabels" :key="'lg' + lab" class="lg-item">
-            <i :class="'dot c' + (Number(lab) % 8)" /> Кластер {{ lab }}
+            <i class="dot" :style="{ background: colorFor(lab) }" /> Кластер {{ lab }}
           </span>
         </div>
         <div v-for="r in transitionRuns" :key="r.id" class="stacked-row">
@@ -59,8 +59,7 @@
               v-for="seg in stackedSegments(r)"
               :key="seg.label"
               class="stacked-seg"
-              :class="'c' + (Number(seg.label) % 8)"
-              :style="{ width: seg.pct + '%' }"
+              :style="{ width: seg.pct + '%', background: colorFor(Number(seg.label)) }"
               :title="`Кластер ${seg.label}: ${seg.count}`"
             />
           </div>
@@ -90,7 +89,9 @@
                 <td
                   v-for="(cell, j) in heatmap.matrix[i]"
                   :key="j"
-                  :class="cellClass(cell)"
+                  class="heatmap-cell"
+                  :class="cell === null || cell === undefined ? 'heatmap-cell--empty' : 'heatmap-cell--fill'"
+                  :style="heatmapCellStyle(cell)"
                   :title="'Кластер ' + cell"
                 >
                   {{ cell === null || cell === undefined ? '—' : cell }}
@@ -107,6 +108,9 @@
 <script setup>
 import { ref, computed, watch, inject } from 'vue'
 import api from '../../api'
+import { colorForClusterLabel } from '../../utils/clusterColors'
+
+const colorFor = (lab) => colorForClusterLabel(lab)
 
 const props = defineProps({
   groupId: { type: [String, Number], default: '' },
@@ -176,10 +180,15 @@ const stackedSegments = (r) => {
   }))
 }
 
-const cellClass = (cell) => {
-  if (cell === null || cell === undefined) return 'heatmap-cell heatmap-cell--empty'
-  const n = Number(cell) % 8
-  return `heatmap-cell heatmap-cell--c${n}`
+const heatmapCellStyle = (cell) => {
+  if (cell === null || cell === undefined) return {}
+  const hex = colorForClusterLabel(cell)
+  return {
+    background: `${hex}40`,
+    color: '#0f172a',
+    fontWeight: '700',
+    borderBottom: `2px solid ${hex}`,
+  }
 }
 
 const rowHighlightClass = (i) => {
@@ -257,22 +266,9 @@ watch(
   border-radius: 2px;
   display: inline-block;
 }
-.stacked-seg.c0,
-.dot.c0 { background: #6366f1; }
-.stacked-seg.c1,
-.dot.c1 { background: #06b6d4; }
-.stacked-seg.c2,
-.dot.c2 { background: #10b981; }
-.stacked-seg.c3,
-.dot.c3 { background: #f59e0b; }
-.stacked-seg.c4,
-.dot.c4 { background: #ec4899; }
-.stacked-seg.c5,
-.dot.c5 { background: #8b5cf6; }
-.stacked-seg.c6,
-.dot.c6 { background: #f97316; }
-.stacked-seg.c7,
-.dot.c7 { background: #64748b; }
+.heatmap-cell--fill {
+  transition: background 0.15s ease;
+}
 .heatmap-wrap {
   overflow-x: auto;
   margin-top: 0.5rem;
@@ -310,14 +306,6 @@ watch(
   background: #f8fafc;
   color: #94a3b8;
 }
-.heatmap-cell--c0 { background: #e0e7ff; }
-.heatmap-cell--c1 { background: #cffafe; }
-.heatmap-cell--c2 { background: #d1fae5; }
-.heatmap-cell--c3 { background: #fef3c7; }
-.heatmap-cell--c4 { background: #fce7f3; }
-.heatmap-cell--c5 { background: #e9d5ff; }
-.heatmap-cell--c6 { background: #fed7aa; }
-.heatmap-cell--c7 { background: #e2e8f0; }
 :deep(tr.heatmap-row--hl) td {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

@@ -25,9 +25,24 @@
 
       <div v-if="detail" class="ui-card">
         <h3 style="margin-top: 0">Состав кластеров</h3>
+        <p class="ui-meta legend-hint">
+          Цвет заголовка и меток совпадает с вкладкой «Кластеризация».
+        </p>
         <div v-for="c in detail.clusters" :key="c.label" class="block">
-          <p class="title">Кластер {{ c.label }} <span class="ui-meta">({{ c.size }})</span></p>
-          <p class="names">{{ c.student_names.join(', ') }}</p>
+          <p class="title">
+            <span class="swatch" :style="{ background: colorFor(c.label) }" />
+            Кластер {{ c.label }} <span class="ui-meta">({{ c.size }})</span>
+          </p>
+          <div class="name-chips">
+            <span
+              v-for="(name, idx) in c.student_names"
+              :key="idx"
+              class="name-chip"
+              :style="{ borderColor: colorFor(c.label), color: colorFor(c.label) }"
+            >
+              {{ name }}
+            </span>
+          </div>
         </div>
       </div>
       <p v-else-if="runs.length === 0" class="ui-meta">Пока нет запусков — выполните кластеризацию.</p>
@@ -38,6 +53,9 @@
 <script setup>
 import { ref, watch, inject } from 'vue'
 import api from '../../api'
+import { colorForClusterLabel } from '../../utils/clusterColors'
+
+const colorFor = (label) => colorForClusterLabel(label)
 
 const props = defineProps({
   groupId: { type: [String, Number], default: '' },
@@ -128,5 +146,30 @@ watch(
   margin: 0;
   line-height: 1.5;
   color: var(--text-muted);
+}
+.legend-hint {
+  margin: 0 0 0.75rem;
+}
+.swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 4px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.name-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.name-chip {
+  font-size: 0.82rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 2px solid;
+  background: #fff;
+  font-weight: 600;
 }
 </style>

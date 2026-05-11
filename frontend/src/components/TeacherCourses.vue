@@ -32,16 +32,9 @@
       <div v-if="selectedCourseId" style="margin-top: 1rem">
         <h4 style="margin: 0 0 0.5rem">Группы предмета</h4>
         <p class="ui-meta" style="margin: 0 0 0.75rem">
-          Можно выбрать только группы, к которым у вас есть доступ.
+          Можно выбрать только группы, к которым у вас есть доступ. Выбранные отображаются цветными метками сверху.
         </p>
-        <div class="ui-card ui-card--muted" style="margin: 0">
-          <div v-for="g in courseGroups" :key="g.id" class="ui-row" style="margin: 0.35rem 0">
-            <label class="ui-row ui-grow" style="margin: 0; gap: 0.5rem; align-items: center">
-              <input type="checkbox" v-model="g.selected" />
-              <span>{{ g.name }}</span>
-            </label>
-          </div>
-        </div>
+        <GroupCheckboxList v-model="selectedGroupIds" :options="courseGroupOptions" />
         <div class="ui-actions">
           <button type="button" class="ui-btn ui-btn--secondary" @click="saveGroups">Сохранить группы</button>
         </div>
@@ -53,17 +46,23 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import api from '../api'
+import GroupCheckboxList from './GroupCheckboxList.vue'
 
 const courses = ref([])
 const selectedCourseId = ref(0)
 const courseGroups = ref([])
+const selectedGroupIds = ref([])
 const newName = ref('')
 const error = ref('')
+
+const courseGroupOptions = computed(() =>
+  courseGroups.value.map((g) => ({ id: Number(g.id), name: g.name }))
+)
 
 const selectedCourse = computed(() => courses.value.find((c) => c.id === selectedCourseId.value) || null)
 
 const loadCourses = async () => {
-  const res = await api.get('/courses')
+  const res = await api.get('/courses', { params: { include_archived: true } })
   courses.value = res.data || []
   if (!selectedCourseId.value && courses.value.length) {
     selectedCourseId.value = courses.value[0].id
@@ -75,6 +74,7 @@ const loadCourseGroups = async () => {
   if (!selectedCourseId.value) return
   const res = await api.get(`/courses/${selectedCourseId.value}/groups`)
   courseGroups.value = res.data?.groups || []
+  selectedGroupIds.value = courseGroups.value.filter((g) => g.selected).map((g) => Number(g.id))
 }
 
 const createCourse = async () => {
@@ -94,7 +94,7 @@ const createCourse = async () => {
 }
 
 const saveGroups = async () => {
-  const ids = courseGroups.value.filter((g) => g.selected).map((g) => g.id)
+  const ids = selectedGroupIds.value.map((x) => Number(x)).filter((n) => n > 0)
   try {
     await api.put(`/courses/${selectedCourseId.value}/groups`, { group_ids: ids })
     await loadCourseGroups()

@@ -21,6 +21,8 @@ def list_topics(current_user):
         return jsonify({'error': 'Предмет не найден'}), 404
     if current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
         return jsonify({'error': 'forbidden'}), 403
+    if getattr(c, 'archived', False):
+        return jsonify({'error': 'Предмет в архиве'}), 400
     rows = topic_repo.find_by_course(c.id, c.teacher_id)
     return jsonify([{'id': t.id, 'name': t.name, 'course_id': t.course_id} for t in rows]), 200
 
@@ -36,6 +38,8 @@ def create_topic(current_user):
         return jsonify({'error': 'Предмет не найден'}), 404
     if current_user['role'] != 'admin' and int(c.teacher_id) != int(current_user['id']):
         return jsonify({'error': 'forbidden'}), 403
+    if getattr(c, 'archived', False):
+        return jsonify({'error': 'Предмет в архиве'}), 400
     t = topic_repo.create(name, c.teacher_id, c.id)
     return jsonify({'id': t.id, 'name': t.name, 'course_id': t.course_id}), 201
 
