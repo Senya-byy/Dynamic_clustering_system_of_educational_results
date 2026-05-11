@@ -5,6 +5,9 @@
     <div v-if="profile" class="ui-card">
       <p class="ui-meta"><strong>Логин:</strong> {{ profile.login }}</p>
       <p class="ui-meta"><strong>Роль:</strong> <span class="ui-badge ui-badge--accent">{{ profile.role }}</span></p>
+      <p v-if="isStudent" class="ui-meta">
+        <strong>Группа:</strong> {{ studentGroupName || '—' }}
+      </p>
 
       <label class="ui-label" for="fn">Полное имя</label>
       <input id="fn" v-model="profile.full_name" class="ui-input" />
@@ -76,6 +79,7 @@ const feedbackFormUrl = FEEDBACK_FORM_URL
 
 const authStore = useAuthStore()
 const isTeacher = computed(() => authStore.role === 'teacher')
+const isStudent = computed(() => authStore.role === 'student')
 
 const profile = ref(null)
 const pwd = ref({ old: '', new: '' })
@@ -88,9 +92,26 @@ const attachGroupId = ref(0)
 const groupMsg = ref('')
 const groupErr = ref(false)
 
+const studentGroupName = ref('')
+
 const fetchProfile = async () => {
   const res = await api.get('/auth/profile')
   profile.value = res.data
+}
+
+const fetchStudentGroupName = async () => {
+  if (!isStudent.value) return
+  studentGroupName.value = ''
+  const gid = Number(profile.value?.group_id || 0)
+  if (!gid) return
+  try {
+    const res = await api.get('/register/groups')
+    const rows = res.data || []
+    const g = rows.find((x) => Number(x.id) === gid)
+    studentGroupName.value = g ? g.name : ''
+  } catch {
+    studentGroupName.value = ''
+  }
 }
 
 const fetchTeacherGroups = async () => {
@@ -192,6 +213,7 @@ const detachGroup = async (g) => {
 
 onMounted(async () => {
   await fetchProfile()
+  await fetchStudentGroupName()
   await fetchTeacherGroups()
   await fetchAllGroupsForAttach()
 })

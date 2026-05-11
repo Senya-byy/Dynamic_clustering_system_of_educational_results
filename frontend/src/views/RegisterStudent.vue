@@ -61,7 +61,7 @@
         >
           <option disabled :value="0">Выберите группу</option>
           <option v-for="g in groups" :key="g.id" :value="g.id">
-            {{ g.name }} — {{ g.teacher_name || g.teacher_login || 'преподаватель' }}
+            {{ g.name }}
           </option>
         </select>
 
